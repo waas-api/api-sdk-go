@@ -4,17 +4,17 @@
 ```go
 func main() {
     cf := shop_client.ClientConfig{
-    AppId:             "asdf",
-    Version:           "1.0",
-    KeyVersion:        "admin",
-    PrivateKey:        "xxx",
-    PlatformPublicKey: "xxx",
-    BaseUrl:           "https://api.xxx.com",
+        AppId:             "asdf",
+        Version:           "1.0",
+        KeyVersion:        "admin",
+        PrivateKey:        "xxx",
+        PlatformPublicKey: "xxx",
+        BaseUrl:           "https://api.xxx.com",
     }
     c := shop_client.NewClient(cf)
     
     params := shop_client.AddressGetBatchRequest{
-    Coin: "trx",
+        Coin: "trx",
     }
     res, err := c.AddressGetBatch(context.TODO(), params)
     resBs, _ := json.MarshalIndent(res, "", "\t")

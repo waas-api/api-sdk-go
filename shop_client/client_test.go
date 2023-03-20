@@ -31,7 +31,7 @@ func init() {
 
 func Test_client_Post(t *testing.T) {
 	params := AddressGetBatchRequest{
-		Coin: "ada",
+		Coin: "trx",
 	}
 	res := AddressGetBatchResponse{}
 	err := testClient.Post(context.TODO(), "/address/getBatch", params, &res)
@@ -42,7 +42,7 @@ func Test_client_Post(t *testing.T) {
 
 func Test_client_AddressGetBatch(t *testing.T) {
 	params := AddressGetBatchRequest{
-		Coin: "aca",
+		Coin: "trx",
 	}
 	res, err := testClient.AddressGetBatch(context.TODO(), params)
 	resBs, _ := json.MarshalIndent(res, "", "\t")
