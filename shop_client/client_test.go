@@ -15,7 +15,7 @@ var (
 )
 
 func init() {
-	bs, err := os.ReadFile("../config_example.yaml")
+	bs, err := os.ReadFile("../config.yaml")
 	if err != nil {
 		panic(err)
 	}
