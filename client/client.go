@@ -1,24 +1,38 @@
-package shop_client
+package client
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/imroc/req/v3"
+	"github.com/waas-api/api-sdk/crypto"
 	"io"
 	"time"
-	"waas/signature"
 )
 
 type Client interface {
 	Post(ctx context.Context, urlPath string, request interface{}, responseRcv interface{}) error
+
+	// CoinList Coin related api for the merchant
+	CoinList(context.Context, CoinListRequest) (CoinListResponse, error)
+
+	// AddressGetBatch Return the new address to the merchant
+	// The number of addresses obtained at a time is N (default 200), and merchants can request multiple times according to actual needs.
+	// For accounts like EOS + memo mode, this interface only returns memo, with the interface: /address/coinAccount
+	// Note: Platform eth, bnb_bsc (bsc main chain), ht_heco (heco main chain) are sharing the eth address, when requesting the address-related api please use eth as the parameter value of coin (coin=eth )
 	AddressGetBatch(context.Context, AddressGetBatchRequest) (AddressGetBatchResponse, error)
+
+	// AddressSyncStatus After the merchant assigns the address to the user, it must notify the platform to update the address usage status through the "Status Synchronization Interface".
 	AddressSyncStatus(context.Context, AddressSyncStatusRequest) (AddressSyncStatusResponse, error)
-	AddressSyncBatchStatus(context.Context, AddressSyncBatchStatusRequest) (AddressSyncBatchStatusResponse, error)
-	TransferSubmit(context.Context, TransferSubmitRequest) (TransferSubmitResponse, error)
+
+	// AddressList Query address usage status, address ownership.
+	AddressList(context.Context, AddressListRequest) (AddressListResponse, error)
+
+	// Transfer The merchant initial a on-chain withdrawal request will use this API. In order to complete the withdrawl request, merchant need to prepare the callback API for risk control callback. ( Detail please refer to the Risk Control callback -> The second review of the withdrawal order)
+	Transfer(context.Context, TransferRequest) (TransferResponse, error)
 }
 
-func NewClient(config ClientConfig) Client {
+func NewClient(config Config) Client {
 	if config.AppId == "" {
 		panic("app_id required")
 	}
@@ -37,7 +51,7 @@ func NewClient(config ClientConfig) Client {
 			SetBaseURL(config.BaseUrl).
 			EnableDumpEachRequest().
 			OnBeforeRequest(func(client *req.Client, req *req.Request) error {
-				// generate signature for request
+				// generate crypto for request
 				bodyReader, err := req.GetBody()
 				if err != nil {
 					return err
@@ -46,7 +60,7 @@ func NewClient(config ClientConfig) Client {
 				if err != nil {
 					return err
 				}
-				newReqBodyBytes, err := signature.ShopClientGenPlatformRequestSign(reqBodyBytes, config.PrivateKey)
+				newReqBodyBytes, err := crypto.ShopClientGenPlatformRequestSign(reqBodyBytes, config.PrivateKey)
 				if err != nil {
 					return err
 				}
@@ -69,15 +83,15 @@ func NewClient(config ClientConfig) Client {
 					return nil
 				}
 
-				// verify signature of response
+				// verify crypto of response
 				resBody, err := resp.ToBytes()
 				if err != nil {
 					resp.Err = fmt.Errorf("read response fail: %v", err)
 					return nil
 				}
-				err = signature.ShopClientVerifyPlatformResponseSign(resBody, config.PlatformPublicKey)
+				err = crypto.ShopClientVerifyPlatformResponseSign(resBody, config.PlatformPublicKey)
 				if err != nil {
-					resp.Err = fmt.Errorf("verify response signature fail: %v", err)
+					resp.Err = fmt.Errorf("verify response crypto fail: %v", err)
 					return nil
 				}
 
@@ -89,14 +103,14 @@ func NewClient(config ClientConfig) Client {
 	return &c
 }
 
-type ClientConfig struct {
+type Config struct {
 	// required, provided by platform
 	AppId string `json:"app_id" yaml:"app_id"`
 	// required, default: 1.0
 	Version string `json:"version" yaml:"version"`
 	// required, default: admin
 	KeyVersion string `json:"key_version" yaml:"key_version"`
-	// required, RSA private key value for generate request signature. Create RSA key pair options，length=2048，format=PKCS#8
+	// required, RSA private key value for generate request crypto. Create RSA key pair options，length=2048，format=PKCS#8
 	PrivateKey string `json:"private_key" yaml:"private_key"`
 	// required, RSA public key value for verify API response，provided by platform
 	PlatformPublicKey string `json:"platform_public_key" yaml:"platform_public_key"`
@@ -104,7 +118,7 @@ type ClientConfig struct {
 	BaseUrl string `json:"base_url" yaml:"base_url"`
 }
 
-func (rcv ClientConfig) newBaseRequest() baseRequest {
+func (rcv Config) newBaseRequest() baseRequest {
 	return baseRequest{
 		AppId:      rcv.AppId,
 		Version:    rcv.Version,
@@ -115,7 +129,7 @@ func (rcv ClientConfig) newBaseRequest() baseRequest {
 
 type client struct {
 	*req.Client
-	conf ClientConfig
+	conf Config
 }
 
 func (c client) Post(ctx context.Context, urlPath string, request interface{}, responseRcv interface{}) (err error) {
@@ -137,6 +151,22 @@ func (c client) Post(ctx context.Context, urlPath string, request interface{}, r
 		Post(path(urlPath).Build(c.conf.BaseUrl))
 
 	return err
+}
+
+func (c client) CoinList(ctx context.Context, request CoinListRequest) (res CoinListResponse, err error) {
+	reqBody := struct {
+		baseRequest
+		CoinListRequest
+	}{
+		baseRequest:     c.conf.newBaseRequest(),
+		CoinListRequest: request,
+	}
+	_, err = c.R().SetContext(ctx).
+		SetBodyJsonMarshal(reqBody).
+		SetSuccessResult(&res).
+		Post(string(pathCoinList))
+
+	return res, err
 }
 
 func (c client) AddressGetBatch(ctx context.Context, request AddressGetBatchRequest) (res AddressGetBatchResponse, err error) {
@@ -171,34 +201,34 @@ func (c client) AddressSyncStatus(ctx context.Context, request AddressSyncStatus
 	return res, err
 }
 
-func (c client) AddressSyncBatchStatus(ctx context.Context, request AddressSyncBatchStatusRequest) (res AddressSyncBatchStatusResponse, err error) {
+func (c client) AddressList(ctx context.Context, request AddressListRequest) (res AddressListResponse, err error) {
 	reqBody := struct {
 		baseRequest
-		AddressSyncBatchStatusRequest
+		AddressListRequest
 	}{
-		baseRequest:                   c.conf.newBaseRequest(),
-		AddressSyncBatchStatusRequest: request,
+		baseRequest:        c.conf.newBaseRequest(),
+		AddressListRequest: request,
 	}
 	_, err = c.R().SetContext(ctx).
 		SetBodyJsonMarshal(reqBody).
 		SetSuccessResult(&res).
-		Post(pathAddressSyncBatchStatus.Build(c.conf.BaseUrl))
+		Post(pathAddressList.Build(c.conf.BaseUrl))
 
 	return res, err
 }
 
-func (c client) TransferSubmit(ctx context.Context, request TransferSubmitRequest) (res TransferSubmitResponse, err error) {
+func (c client) Transfer(ctx context.Context, request TransferRequest) (res TransferResponse, err error) {
 	reqBody := struct {
 		baseRequest
-		TransferSubmitRequest
+		TransferRequest
 	}{
-		baseRequest:           c.conf.newBaseRequest(),
-		TransferSubmitRequest: request,
+		baseRequest:     c.conf.newBaseRequest(),
+		TransferRequest: request,
 	}
 	_, err = c.R().SetContext(ctx).
 		SetBodyJsonMarshal(reqBody).
 		SetSuccessResult(&res).
-		Post(pathTransferSubmit.Build(c.conf.BaseUrl))
+		Post(pathTransfer.Build(c.conf.BaseUrl))
 
 	return res, err
 }

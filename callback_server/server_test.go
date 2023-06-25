@@ -1,248 +1,231 @@
 package callback_server
 
 import (
-	"encoding/json"
-	"github.com/imroc/req/v3"
-	"gopkg.in/yaml.v3"
-	"io"
+	"github.com/waas-api/api-sdk/crypto"
 	"log"
 	"net/http"
-	"os"
 	"testing"
-	"waas/signature"
+	"time"
 )
 
 var (
-	testServerConf ServerConfig
-)
-
-func init() {
-	bs, err := os.ReadFile("../config.yaml")
-	if err != nil {
-		panic(err)
-	}
-	var it struct {
-		CallbackServerConfig ServerConfig `json:"callback_server_config" yaml:"callback_server_config"`
-	}
-	err = yaml.Unmarshal(bs, &it)
-	if err != nil {
-		panic(err)
-	}
-	testServerConf = it.CallbackServerConfig
-}
-
-// shop callback server example handler
-func Test_CallbackServer(t *testing.T) {
-
-	http.HandleFunc("/callback/deposit", func(w http.ResponseWriter, r *http.Request) {
-
-		// this block can be in web server middleware or your custom controller
-		{
-			bs, err := io.ReadAll(r.Body)
-			if err != nil {
-				w.WriteHeader(400)
-				w.Write([]byte(err.Error()))
-				return
-			}
-			t.Log("Request Body:", string(bs))
-
-			// check request sign
-			if err := signature.CallbackServerVerifyRequestSign(bs, testServerConf.PlatformPublicKey); err != nil {
-				w.WriteHeader(500)
-				w.Write([]byte(err.Error()))
-				return
-			}
-		}
-
-		// your business code
-		resStruct := struct {
-			Status int         `json:"status"`
-			Data   interface{} `json:"data"`
-			Sign   string      `json:"sign"`
-		}{
-			Status: 200,
-			Data: map[string]interface{}{
-				"success_data": "success",
-			},
-		}
-
-		// this block can be in web server middleware or your custom controller
-		{
-			resBytes, err := json.Marshal(resStruct)
-			if err != nil {
-				w.WriteHeader(500)
-				w.Write([]byte(err.Error()))
-				return
-			}
-			// generate sign for response
-			signedRes, err := signature.CallbackServerGenResponseSign(resBytes, testServerConf.PrivateKey)
-			if err != nil {
-				w.WriteHeader(500)
-				w.Write([]byte(err.Error()))
-				return
-			}
-			resBytes = signedRes.([]byte)
-			t.Log("Response Body:", string(resBytes))
-			w.WriteHeader(200)
-			w.Write(resBytes)
-		}
-	})
-
-	log.Println("Starting server at port 8080")
-	if err := http.ListenAndServe(":8080", nil); err != nil {
-		log.Fatal(err)
-	}
-}
-
-// another shop callback server implementation, handle sign in your custom controller.
-func Test_CallbackServer2(t *testing.T) {
-
-	http.HandleFunc("/callback/deposit", func(w http.ResponseWriter, r *http.Request) {
-
-		reqStruct := struct {
-			Data interface{} `json:"data"`
-			Sign string      `json:"sign"`
-		}{}
-		resStruct := struct {
-			Status int         `json:"status"`
-			Data   interface{} `json:"data"`
-			Sign   string      `json:"sign"`
-		}{}
-
-		// bind request body, implement detail depends on your server framework.
-		{
-			bs, err := io.ReadAll(r.Body)
-			if err != nil {
-				w.WriteHeader(400)
-				w.Write([]byte(err.Error()))
-				return
-			}
-			t.Log("Request Body:", string(bs))
-			json.Unmarshal(bs, &reqStruct)
-		}
-
-		{
-			// check request sign
-			if err := signature.CallbackServerVerifyRequestSign(reqStruct, testServerConf.PlatformPublicKey); err != nil {
-				w.WriteHeader(500)
-				w.Write([]byte(err.Error()))
-				return
-			}
-
-			// your business code
-			resStruct.Status = 200
-			resStruct.Data = map[string]interface{}{
-				"success_data": "success",
-			}
-
-			// generate sign for response
-			if sign, err := signature.CallbackServerGenResponseSignOnly(resStruct.Data, testServerConf.PrivateKey); err != nil {
-				w.WriteHeader(500)
-				w.Write([]byte(err.Error()))
-				return
-			} else {
-				resStruct.Sign = sign
-			}
-		}
-
-		// write response body, implement detail depends on your server framework.
-		{
-			resBytes, _ := json.Marshal(resStruct)
-			t.Log("Response Body:", string(resBytes))
-			w.WriteHeader(200)
-			w.Write(resBytes)
-		}
-	})
-
-	log.Println("Starting server at port 8080")
-	if err := http.ListenAndServe(":8080", nil); err != nil {
-		log.Fatal(err)
-	}
-}
-
-var (
-	platformPrivateKey = `-----BEGIN PRIVATE KEY-----
-MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC0bEb9/KyK2rZK
-PgTkSVfD9dLVpCQBOWfmgIdJKaLS+KbH4htijm3x7GSseBlkDOt681udO3lyDVve
-u/bYo9KBKlMOLyXfMDw4Os1u17zt3b/zVHfc8hY6Qlf0qUFn6/uw5c6zG7RD7jqW
-mkz8c7hk7610tFu/2DXZl5Bb+WEVxkv6+ifVM/LVqSULGqdmpbS8ldWcMwMmYaDm
-5Y9JkJnraFdidW/5YzjyqBiWLj57eZo8/KHlVuDWtJO4+deCe2vN1cs4w6/yO4VA
-DF+QgsfYb1gm7C9RMPiUBPcWz2gl+5TkDvWPCMFqvVKAhDmWesNUUayc5YFQikqh
-U6qt+sz9AgMBAAECggEAQZADMDKMZJzblxj4YBiCyxPePII8DzHUHr/f6Wc24uE2
-gfYZK3REYaAcaUvvNhs3yuL6DKXbGOXf142IQustCIDf04ywf20gxPIhSsEcx3dI
-VF0CfYh/KUaIfcCvotrvCDZKKW3M0M6V/boudaJ7hDpQVtNfb9RapSpda/6wF9/t
-30cTlPTmDd8mv2IzzGMCHE+I/z9IQjNOZiYqVYEghO+YhQJm7QUeLX6AnYCJxjzc
-OV/2egfNjmcwJSUfSNeJKxUouN40oJ10ZbFvTg14st0K/d653fZdjyDHhRoP7aGi
-08Q4RH9dCy5KIvn6gUhgaH+F+Shrbqyyp7UO74GJBQKBgQDeBkckhmgZmrlh5pIs
-S57n8h1WTLEysgJrn59ybdkSkAeS/0w6qZa596xSroR6UJpvxy3N5CRR0PPU8rtp
-1cl5Wcioj82n4M0QRGwK1MqUPAY2pgFo0JUDBoKhkE4U4D0pR+AE0qXrGahNHM9M
-+CiFi6fatt/VjTWwZ0H/ZMB21wKBgQDQCEZTcfasr8gfQqoivPWjbFzFXhoY7vbV
-oo2EQvNOfcO2LkNtUq3hFbMSpVC/GJn6GHT+9bmIwNcm7wkS6q3GsjOZa6WDIW/H
-biHPH0X4E5UsWc122gr0BWJbp2c5oJqAUfJVjEkxmIqYkbPl3WwY50+dlYED83yp
-kqMwdLRkSwKBgQDFQaqfZtLCPNcLhgDEXgM2a8No0wZz1feUiuLslW/QsCoqjau6
-SsXhP4zYgLiuu0IaoUmurU0fa5fW0Dl2FDzGFeDS8cBzsKRAGaosDVZWUOXsU5zY
-9MgPQg95X24f2gI81ODRKB3FPKxspnX/GlNWIvfkt6kyYB0dNwBJ2cetTQKBgQCw
-fISlIEbkY9CEbLsH84T1GuZtbpL3WivAPEKQ1XeyvFFACmmboovvK8ia5fLl3Aot
-OXhwIKlBUlB1ME9jZAL/UYki/EcTQ1egOlembuKePobMdHcyAHNQaAz0ssWJBy5r
-9JmBaB1kXQQfwWR8e2fMjNhnWUF1x6iX99ZIMoojlwKBgGcz4505U4NBBKS1+eEr
-kKTmJ0GKbIbPLTYO2Y2JsjgS0cHAd25u4LIz8kJrFLZ5EisPXjVSmtpmCYEH0HQs
-/ekkHrLoQSXluCSAFqxQyWupHD/33RCMr35aB2O6VclK6H/SD35EERfGT4F+gTw+
-bIcFnwrx3Co+oQS0ImoKzpwR
+	privateKey = `-----BEGIN PRIVATE KEY-----
+MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCY7RWlhM51ArHr
+QIuWd1tqABES34/3gqSegp+PW1nu7lL0w9z/+dB3GZP243LO54v2K/QHrDHuEEPc
+VD4WhaTtrho55YRkXFKQNCmE3W/pKZYnU+BOEBEF7wZBt3X+82xNafKvHscfNl1m
+y2to+P74nLGE6kQNZrA+0RGxib9k9JxV1TsNVxLYSlf4TJ4Ikb82qtXMxEXDaEC7
+mFNtoefJJShw+BMwqmRfOhDP8LG4+10/Kx2ZT0lxyHdF/NyWOazzDzcwxT6Hzzzh
+sP2yNW9tLdlk+SnMVsZEqOBNKzraYCRBhsis0+zmWejQQ5Q3Nu3CHg088+WLci+9
+ee7G3zLzAgMBAAECggEAQCtb5fRwXZEf70NKT30OEtCsWWsOEiHzyb+uDI2ckzHW
+BXcaiR7eZtuIxxRx3Hg0truCzqVm3ipdD1saIoE5z7I6twikISjMTE5XDbWNfB1D
+MIV1ncwIGKFP0suU68JhM6q9dtZHX8WEM9ov3AB/nPrDUq6ql6T7V6CK+CCA+28z
+DG6Bh8jgGMCGyPtvi7ku09pJUGLwRBfRGE2wpcZ4nvSLwbv9Eyaf2ZIyZw6MH6lF
+IyI9uVY5ePWh/vVQdbXFmSH2GAuxzxz3T9IvMwUyXiK4t7hVWHJlf9/UQpfbFTXc
+4V+/Tmn1gQuLmL4oTs1bRg28AhIsunc9yxlr3wfmAQKBgQDHLm4LG+VUIgGJhxR6
++KmhXJ3S84PdNhEbnNmRJd2ZQlH38YAjndf2FLTH9KoyWw/hfJp3GTHv716W+T1u
+qBUhUw7ELugzNY0scxG0xBt+9hJAku+MwgXx53ZnDfV6iRKbc8x/RNRs+OQi8nCa
+PO3pdKNrMOHtohuYp0+jDAhiMwKBgQDEjMiBPvw6ZWa2Jm2Q9FhSwUc86ZiT+o3M
+AyoQtIFVXWhCM4I5Yk5JzDIi05iJb/dtyulp9UK+/HIKaJtj2Shsp5CZMW9UISea
+klrtk/xS0A4qUUOxNxOFNzQl466RULxLCR0kmLqJ6ou8hHpOkdvlGqRbE5JVVOCM
+akoa8iysQQKBgBT5QaMv080xK4JE1BZC2vHf48qT093WVKTYtlw/ZX8+6Yy3RGv7
+sgL6mTK5A7b7ucdfrJA/+e8vAIHbSum9D0SMD3D/E3pY+D2m/EVRpSeQV8mu70Se
+JawcWG5vnNrDVk9COVVpdQjoiHVZnBvRsKe1nYOrCQ9R06AWdh9QJA3bAoGBAIvj
+d0Elxvb4/KVfrFOi1MnxbfZYe5O2m/07s1C4Z+SN2opjhqe44+d6QaSv3LzUx9GI
+vaAAQ0US/0eRNCdYg4DxseSWXpoODtXgnH7C+K8oDSzpMbiLboU9yQu+hJxATgNJ
+tUg6u2k1WccOss4A2fSxhZCc2WWKR1covx12h30BAoGBALZ8IpYY5IJuFXM0aYg5
+QbOLlDG0Z13bIpKmgk5IHq53uEkR2+ttSN7i2W3fJhlpUpr4HFXEP5Uk3Q7KE4De
+ziVkAkNnZ4c8TISG2SANqaSZggQWXnZNu3am7P/C/19EHOGJigM/wsbjw5KXMqMY
+ny5QBi2nWF73omosGLjTrSZ2
 -----END PRIVATE KEY-----
 `
-	shopPublicKey = `-----BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqXtvC2pJrS0yBpOXp1kT
-MXhENEPm3diOoTbj+SWD0KwEuebax9d0x7blEMi75Y64gZ58K5wNtVVKFGpt+lCp
-DNp8Kbx2pOhZxbikwRkTU5Ef9+eu1MDbvUTx93tVYViih1jNOfhpRudIduh6YA9U
-FPl8GfurisMDQH7059PqN9BKNNNG4RJeBKKLHjgdMti9z42qQdMUUFvKP4/JU9JN
-FB3cewvar6n0UQBA9ifsPEEIMoVZBzrRi1fH9P1hoCrFDZMWrRmw/8rTL1+a9Qs9
-HpS8jmm3Gtfp3fZZHNSXpLRmORFEXrrWap1os8RTRGyFW75+4e6VXvILXNOtLqZj
-rwIDAQAB
+
+	// provide by platform
+	platformPublicKey = `-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0NwyEfQupjAtS7zIeMuR
+995t5fzW9FRm9i3+WKQlfLf81wb2dxUyZh2kalCZkkXHbJyyv2XDhMidf1l3kZo/
+gCXS+RHmsfinCRE6Y4rkFPLhYvq0tGhkoVDFVhPHZGdRkaUBRWlj8pN/BuyMYLMY
+uGrYAQb2J/c4UG0nCB/VuqQ+WsQoNMHxIU/HGehsShHI99maezheP0F6QNIPUtxe
+GDKQ52Ks1dWwtIq433MiwRDWaGfRXMVzK+D99BET09e41lJVqvNijhRHwXo6bxjV
+kJRYmCGShTkYITeDVhd6NpV/mhPrRSQcwEXjJSObHcbh9UhIZjZGAw56Qfqz66wk
+lwIDAQAB
 -----END PUBLIC KEY-----
 `
 )
 
-// send notify request as platform, shop developer no need to care about this function.
-func Test_PlatformNotify(t *testing.T) {
-	data := map[string]string{
-		"order_id":      "2020010211153423123456",
-		"coin":          "eth",
-		"chain":         "eth",
-		"address":       "this is test address",
-		"txid":          "this is txid",
-		"total":         "5",
-		"amount":        "10.0089",
-		"fee":           "0",
-		"status":        "0",
-		"confirm_count": "5",
-		"time":          "1650011196",
-		"type":          "1",
-	}
-	err, sign := signature.ApiSign(data, platformPrivateKey)
-	if err != nil {
-		panic(err)
-	}
-	params := map[string]interface{}{
-		"sign": sign,
-		"data": data,
-	}
-	params["sign"] = sign
-	bs, err := json.Marshal(params)
-	t.Log("request:\n", string(bs), err)
+var (
+	riskPrivateKey = `-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDP1ZvDgmtRszLy
+s7d933C+Qv+9mC1IiJM45IBqMW9haNcOlxY/rB9ewKBY7pC7njeo1LMQxIzgSaeh
+MdNsTXLfsO2o3pkn7Vzof0kP8W4pKPRarnNoV7qNvRh0Lbwb2bzzwul1kUovHv7M
+MO6wIQmC3QMWJMz3l8WP5wz7aAnpI9DGzaei4PO8/lyj0vBAGuR0mdIXE5x62I/2
+j5nHl7pZsuLIia/pOpc7FHK3F288SmICpmiRjz4WLLqCxuKFZW7hEYzzoddf4mxP
+ydXB71T8Y/sN7rifz3hPuavHh6pYbyDvMjO0RJCJ1cPnEE7OgDgrFWAG5suEPL2F
+Te3ZoJZxAgMBAAECggEAa2Ad2HWSAqTFhrSo8UQ2WGX/ALIVeyrsfPE5EyQ1OitT
+KHuQiBbiIi786NVgOz5z3Sr+1IPnkJ0dGN/ILmUZG06qiptunz03yfqxAaanVmaN
+UChfAaKJhF8UujlCvVTSFVI3EYGdxRiLZW1GdAKtikmrJY6fwq9L55vkjiLjM+pZ
+aDzs9ZNoGDKJPvfb2U694B43U6IB3krwZD8wUMi8CP/3MON5hjdIQ820zfk9j8lg
+x5sWRkRzIhe2cKe8TRC1oPRt2io6Uxv1HnWFDpLQ/1eEkRTVTAEEpAKfgshMyOY2
+BP0FSDZTssBzAYDdNHqDAyNXFbD6eYQRDMUwhZhGAQKBgQDzqOQPlVUY9uAs9E76
+XM/uXVwigaqQ6NUxjXXs+tGSnwcu5nk2GlNgYU5IJUgd8/G2fGxn2luPO2G1/X+6
+Bj6bRGFu+YS8NkE7fuFze6nu2TKe3wunQJldScqSOpELTWiTcDe8FlMqHnGncJ44
+JxkXEKCgysoInGBE3zyH+k0KoQKBgQDaXDu9fXNQmKhmu1MYveKfD1L7L1R0FKB5
+8glY2GjhHwZW9lwn7W1t6kOroHCIHPKxlKNuWBT7uIs/Agd/Mo+fA6w3mn/oEHzr
+gsrqabeIMKHIJXiGt1wlfp/fyIdMwAumN9yMGOoLS+oa3DMOfFa/vQpEXVOJsIzU
+Vt/rBtNJ0QKBgBp04C6A/Hh1denrrReqNDmhkXt9sNODNILo5UESCudstQ72n3qs
+aRkx95oF0krOThSOdgbgwshOnlFwcQn1255oUlwGY8875OFc6YXsi4sPsltlxJIo
+hX6HoKM4EL+1bAF2UdbuZaFRJO4VYFighizm9UoAOuescxeHVb8+AleBAoGBAKWo
+KW5FWRGA7ukZHh58GAwhvQtwybpS17gL5glwDIkVV2Lr/dgQqN8lRXdT/WtVwszz
+/dS9oBWj2IfRi0x1WD4DtEhuvrCYqZymGjkiQKlic6n6u2hAfPi5CqLkZ7jTTUMp
+x/jFAfHWAuGjwlwv+kP2L27T+odP2FdTHQcZo3uxAoGAT1HFdzSQLpPAtJyhPqff
+nhks+XHdsmGic35CAQyyiEUIz4MoxKwnodWu1hDfpdPexcAhbwWSW04TtKXC5eur
++H1E7F2KcMJ2IeTzFB691bzeseSrG6QIkKOFC/hSI5ac+lem98Pc3i3MRDx3xRvB
+sAy4uAWdzJAA70TWEOsVIUw=
+-----END PRIVATE KEY-----
+`
 
-	post, err := req.R().SetBodyJsonMarshal(params).Post("http://127.0.0.1:8080/callback/deposit")
-	if err != nil {
-		panic(err)
-	}
-	var resBase struct {
-		Sign   string
-		Status int
-		Data   json.RawMessage
-	}
-	err = post.UnmarshalJson(&resBase)
-	t.Log("response:\n", post.String(), err)
-	err = signature.ApiVerifySign(signature.ParseJsonToClassMap(string(resBase.Data)), shopPublicKey, resBase.Sign)
-	if err != nil {
-		panic(err)
+	// provide by platform
+	riskPlatformPublicKey = `-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA6YDzI7HOT14i2xWsSfBj
+ZQKGt3zzMU7UDFNkYwa539wFM6FRnkFd6HcTjqCWehivLTbQSbV1wTd9Ub7zXSEE
+C0OKcCqHCYXdWYW48jAwtvRKUjGJ0PKxxZS2XUUWpubbQAXLRUx7DmtbCyDDe+cw
+lKxGI5P6ppSSNGmRpbOztSAyUsL1njv5zw2u91LRo6stM06FCV3x+kJsWYmcs0kz
+chAt89QwfiUK5G6T8myIyFHEKozsiU2brGd5XvxpdX4jJ5RAP0jGUr3i1n7p4dT2
+SRFL0WENHqgkoKaxPwAtTSg7j4YotMXfSvkNk7CJXYvq63GTX1UWL72OsmtKdvkY
+DwIDAQAB
+-----END PUBLIC KEY-----
+`
+)
+
+func Test_CallbackServer(t *testing.T) {
+
+	http.HandleFunc("/callback/deposit", NewHandlerDeposit(func(request DepositCallbackRequest) DepositCallbackResponse {
+
+		log.Println("get deposit callback", request)
+
+		ret := DepositCallbackResponse{}
+
+		// check request sign
+		if err := crypto.CallbackServerVerifyRequestSign(request, platformPublicKey); err != nil {
+			ret.Status = 500
+			log.Println("verify sign fail", err)
+			return ret
+		}
+
+		// check info according to your needs
+		{
+			var localAmount = "10.0089"
+			if localAmount != request.Data.Amount {
+				ret.Status = 500
+				ret.Data.SuccessData = "amount invalid"
+				return ret
+			}
+		}
+
+		// return success after all check is OK
+		ret.Status = 200
+		ret.Data.SuccessData = "success"
+
+		// generate sign for response
+		if sign, err := crypto.CallbackServerGenResponseSignOnly(ret.Data, privateKey); err != nil {
+			ret.Status = 500
+			log.Println("gen sign fail", err)
+			return ret
+		} else {
+			ret.Sign = sign
+		}
+
+		return ret
+	}))
+
+	http.HandleFunc("/callback/withdraw", NewHandlerWithdraw(func(request WithdrawCallbackRequest) WithdrawCallbackResponse {
+
+		log.Println("get withdraw callback", request)
+
+		ret := WithdrawCallbackResponse{}
+
+		// check request sign
+		if err := crypto.CallbackServerVerifyRequestSign(request, platformPublicKey); err != nil {
+			ret.Status = 500
+			log.Println("verify sign fail", err)
+			return ret
+		}
+
+		// check info according to your needs
+		{
+			var localAmount = "0.5"
+			if localAmount != request.Data.Amount {
+				ret.Status = 500
+				ret.Data.SuccessData = "amount invalid"
+				return ret
+			}
+			var localTradeId = "12345678"
+			if localTradeId != request.Data.TradeId {
+				ret.Status = 500
+				ret.Data.SuccessData = "unknown trade_id"
+				return ret
+			}
+		}
+
+		// return success after all check is OK
+		ret.Status = 200
+		ret.Data.SuccessData = "success"
+
+		// generate sign for response
+		if sign, err := crypto.CallbackServerGenResponseSignOnly(ret.Data, privateKey); err != nil {
+			ret.Status = 500
+			log.Println("gen sign fail", err)
+			return ret
+		} else {
+			ret.Sign = sign
+		}
+
+		return ret
+	}))
+
+	http.HandleFunc("/callback/withdraw/risk", NewHandlerWithdrawRisk(func(request WithdrawRiskCallbackRequest) WithdrawRiskCallbackResponse {
+
+		log.Println("get withdraw risk callback", request)
+
+		ret := WithdrawRiskCallbackResponse{}
+
+		// check request sign
+		if err := crypto.CallbackServerVerifyRequestSign(request, riskPlatformPublicKey); err != nil {
+			ret.Status = 5400
+			ret.Data.StatusCode = 5400
+			log.Println("verify sign fail", err)
+			return ret
+		}
+
+		// check info according to your needs
+		{
+			var localAmount = "2.00000000"
+			if localAmount != request.Data.Amount {
+				ret.Status = 5002
+				ret.Data.StatusCode = 5002
+				return ret
+			}
+		}
+
+		// return success after all check is OK
+		ret.Status = 200
+		ret.Data.StatusCode = 200
+		ret.Data.OrderId = request.Data.OrderId
+		ret.Data.Timestamp = time.Now().Unix()
+
+		// generate sign for response
+		if sign, err := crypto.CallbackServerGenResponseSignOnly(ret.Data, riskPrivateKey); err != nil {
+			ret.Status = 500
+			log.Println("gen sign fail", err)
+			return ret
+		} else {
+			ret.Sign = sign
+		}
+
+		return ret
+	}))
+
+	log.Println("Starting server at port 8080")
+	if err := http.ListenAndServe(":8080", nil); err != nil {
+		log.Fatal(err)
 	}
 }

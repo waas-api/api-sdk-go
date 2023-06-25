@@ -1,11 +1,10 @@
-module waas
+module github.com/waas-api/api-sdk
 
 go 1.19
 
 require (
 	github.com/imroc/req/v3 v3.31.2
 	github.com/tidwall/gjson v1.14.4
-	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (

@@ -1,4 +1,4 @@
-package signature
+package crypto
 
 import (
 	"crypto"
@@ -7,9 +7,9 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
-	"fmt"
 	"github.com/tidwall/gjson"
 	"sort"
 )
@@ -89,7 +89,7 @@ func genSignString(data map[string]string) []byte {
 		}
 	}
 
-	fmt.Println("joined string: ", signStr)
+	//fmt.Println("joined string: ", signStr)
 
 	hashMd5 := md5.Sum([]byte(signStr))
 	hashed := hashMd5[:]
@@ -110,6 +110,18 @@ func ParseJsonToClassMap(jsonStr string) (m map[string]string) {
 		return true
 	})
 	return
+}
+
+// ParseObjectToClassMap convert struct to map[string]string
+func ParseObjectToClassMap(v interface{}) map[string]string {
+	if s, ok := v.(string); ok {
+		return ParseJsonToClassMap(s)
+	}
+	bs, err := json.Marshal(v)
+	if err != nil {
+		return make(map[string]string)
+	}
+	return ParseJsonToClassMap(string(bs))
 }
 
 func jsonToString(jsonStr string) string {

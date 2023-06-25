@@ -1,4 +1,4 @@
-package signature
+package crypto
 
 import (
 	"encoding/json"
