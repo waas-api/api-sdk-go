@@ -1,4 +1,4 @@
-module github.com/waas-api/api-sdk
+module github.com/waas-api/api-sdk-go
 
 go 1.19
 

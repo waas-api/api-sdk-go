@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/imroc/req/v3"
-	"github.com/waas-api/api-sdk/crypto"
+	"github.com/waas-api/api-sdk-go/crypto"
 	"io"
 	"time"
 )

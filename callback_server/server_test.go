@@ -1,7 +1,7 @@
 package callback_server
 
 import (
-	"github.com/waas-api/api-sdk/crypto"
+	"github.com/waas-api/api-sdk-go/crypto"
 	"log"
 	"net/http"
 	"testing"

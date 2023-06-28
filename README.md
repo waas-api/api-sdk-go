@@ -2,7 +2,7 @@
 
 ## Install
 ```bash
-go get github.com/waas-api/api-sdk
+go get github.com/waas-api/api-sdk-go
 ```
 
 ## Shop Client Example

@@ -3,7 +3,7 @@ package callback_server
 import (
 	"encoding/json"
 	"github.com/imroc/req/v3"
-	"github.com/waas-api/api-sdk/crypto"
+	"github.com/waas-api/api-sdk-go/crypto"
 	"testing"
 	"time"
 )
