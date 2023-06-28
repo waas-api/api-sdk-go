@@ -1,19 +1,20 @@
-package client
+package example
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/waas-api/api-sdk-go/client"
 	"testing"
 	"time"
 )
 
 var (
-	testClient Client
+	testClient client.Client
 )
 
 func init() {
-	var conf = Config{
+	var conf = client.Config{
 		AppId:      "asdfau9imt86qky9",
 		Version:    "1.0",
 		KeyVersion: "admin",
@@ -57,11 +58,11 @@ lwIDAQAB
 -----END PUBLIC KEY-----`,
 	}
 
-	testClient = NewClient(conf)
+	testClient = client.NewClient(conf)
 }
 
 func Test_client_CoinList(t *testing.T) {
-	params := CoinListRequest{
+	params := client.CoinListRequest{
 		Coin: "trx",
 	}
 	// get shop support coins
@@ -72,7 +73,7 @@ func Test_client_CoinList(t *testing.T) {
 }
 
 func Test_client_AddressGetBatch(t *testing.T) {
-	params := AddressGetBatchRequest{
+	params := client.AddressGetBatchRequest{
 		Coin: "trx",
 	}
 	res, err := testClient.AddressGetBatch(context.TODO(), params)
@@ -82,7 +83,7 @@ func Test_client_AddressGetBatch(t *testing.T) {
 }
 
 func Test_client_AddressSyncStatus(t *testing.T) {
-	params := AddressSyncStatusRequest{
+	params := client.AddressSyncStatusRequest{
 		Coin:    "trx",
 		Address: "TQDGW4EEs4KvAKGKYvGuJawNJDvVU1wDTd0",
 		UserId:  "68685150",
@@ -94,7 +95,7 @@ func Test_client_AddressSyncStatus(t *testing.T) {
 }
 
 func Test_client_AddressList(t *testing.T) {
-	params := AddressListRequest{
+	params := client.AddressListRequest{
 		Coin:   "trx",
 		IsUsed: 2,
 	}
@@ -105,7 +106,7 @@ func Test_client_AddressList(t *testing.T) {
 }
 
 func Test_client_Transfer(t *testing.T) {
-	var params = TransferRequest{
+	var params = client.TransferRequest{
 		UserId:  "666",
 		Coin:    "trx",
 		Amount:  "0.01",

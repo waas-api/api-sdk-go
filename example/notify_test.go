@@ -1,4 +1,4 @@
-package callback_server
+package example
 
 import (
 	"encoding/json"

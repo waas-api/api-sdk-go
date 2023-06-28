@@ -1,6 +1,7 @@
-package callback_server
+package example
 
 import (
+	"github.com/waas-api/api-sdk-go/callback_server"
 	"github.com/waas-api/api-sdk-go/crypto"
 	"log"
 	"net/http"
@@ -98,11 +99,11 @@ DwIDAQAB
 
 func Test_CallbackServer(t *testing.T) {
 
-	http.HandleFunc("/callback/deposit", NewHandlerDeposit(func(request DepositCallbackRequest) DepositCallbackResponse {
+	http.HandleFunc("/callback/deposit", callback_server.NewHandlerDeposit(func(request callback_server.DepositCallbackRequest) callback_server.DepositCallbackResponse {
 
 		log.Println("get deposit callback", request)
 
-		ret := DepositCallbackResponse{}
+		ret := callback_server.DepositCallbackResponse{}
 
 		// check request sign
 		if err := crypto.CallbackServerVerifyRequestSign(request, platformPublicKey); err != nil {
@@ -137,11 +138,11 @@ func Test_CallbackServer(t *testing.T) {
 		return ret
 	}))
 
-	http.HandleFunc("/callback/withdraw", NewHandlerWithdraw(func(request WithdrawCallbackRequest) WithdrawCallbackResponse {
+	http.HandleFunc("/callback/withdraw", callback_server.NewHandlerWithdraw(func(request callback_server.WithdrawCallbackRequest) callback_server.WithdrawCallbackResponse {
 
 		log.Println("get withdraw callback", request)
 
-		ret := WithdrawCallbackResponse{}
+		ret := callback_server.WithdrawCallbackResponse{}
 
 		// check request sign
 		if err := crypto.CallbackServerVerifyRequestSign(request, platformPublicKey); err != nil {
@@ -182,11 +183,11 @@ func Test_CallbackServer(t *testing.T) {
 		return ret
 	}))
 
-	http.HandleFunc("/callback/withdraw/risk", NewHandlerWithdrawRisk(func(request WithdrawRiskCallbackRequest) WithdrawRiskCallbackResponse {
+	http.HandleFunc("/callback/withdraw/risk", callback_server.NewHandlerWithdrawRisk(func(request callback_server.WithdrawRiskCallbackRequest) callback_server.WithdrawRiskCallbackResponse {
 
 		log.Println("get withdraw risk callback", request)
 
-		ret := WithdrawRiskCallbackResponse{}
+		ret := callback_server.WithdrawRiskCallbackResponse{}
 
 		// check request sign
 		if err := crypto.CallbackServerVerifyRequestSign(request, riskPlatformPublicKey); err != nil {

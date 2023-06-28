@@ -7,20 +7,23 @@ go get github.com/waas-api/api-sdk-go
 
 ## Shop Client Example
 ```go
-package client
+package example
 
 import (
-    "context"
-    "encoding/json"
-    "testing"
+	"context"
+	"encoding/json"
+	"fmt"
+	"github.com/waas-api/api-sdk-go/client"
+	"testing"
+	"time"
 )
 
 var (
-    testClient Client
+	testClient client.Client
 )
 
 func init() {
-	var conf = Config{
+	var conf = client.Config{
 		AppId:      "asdfau9imt86qky9",
 		Version:    "1.0",
 		KeyVersion: "admin",
@@ -64,27 +67,38 @@ lwIDAQAB
 -----END PUBLIC KEY-----`,
 	}
 
-	testClient = NewClient(conf)
+	testClient = client.NewClient(conf)
 }
 
 func Test_client_CoinList(t *testing.T) {
-    params := CoinListRequest{
-        Coin: "trx",
-    }
-    // get shop support coins
-    res, err := testClient.CoinList(context.TODO(), params)
-    resBs, _ := json.MarshalIndent(res, "", "\t")
-    t.Log("error:", err)
-    t.Log("response:\n", string(resBs))
+	params := client.CoinListRequest{
+		Coin: "trx",
+	}
+	// get shop support coins
+	res, err := testClient.CoinList(context.TODO(), params)
+	resBs, _ := json.MarshalIndent(res, "", "\t")
+	t.Log("error:", err)
+	t.Log("response:\n", string(resBs))
 }
 ```
 
-> See more example in file `client/client_test.go`.
+> See more example in file `example/client_test.go`.
 
 ## Callback Server Example
 ```go
+package example
+
+import (
+	"github.com/waas-api/api-sdk-go/callback_server"
+	"github.com/waas-api/api-sdk-go/crypto"
+	"log"
+	"net/http"
+	"testing"
+	"time"
+)
+
 var (
-privateKey = `-----BEGIN PRIVATE KEY-----
+	privateKey = `-----BEGIN PRIVATE KEY-----
 MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCY7RWlhM51ArHr
 QIuWd1tqABES34/3gqSegp+PW1nu7lL0w9z/+dB3GZP243LO54v2K/QHrDHuEEPc
 VD4WhaTtrho55YRkXFKQNCmE3W/pKZYnU+BOEBEF7wZBt3X+82xNafKvHscfNl1m
@@ -114,8 +128,8 @@ ny5QBi2nWF73omosGLjTrSZ2
 -----END PRIVATE KEY-----
 `
 
-// provide by platform
-platformPublicKey = `-----BEGIN PUBLIC KEY-----
+	// provide by platform
+	platformPublicKey = `-----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0NwyEfQupjAtS7zIeMuR
 995t5fzW9FRm9i3+WKQlfLf81wb2dxUyZh2kalCZkkXHbJyyv2XDhMidf1l3kZo/
 gCXS+RHmsfinCRE6Y4rkFPLhYvq0tGhkoVDFVhPHZGdRkaUBRWlj8pN/BuyMYLMY
@@ -129,50 +143,50 @@ lwIDAQAB
 
 func Test_CallbackServer(t *testing.T) {
 
-    http.HandleFunc("/callback/deposit", NewHandlerDeposit(func(request DepositCallbackRequest) DepositCallbackResponse {
-    
-        log.Println("get deposit callback", request)
-        
-        ret := DepositCallbackResponse{}
-        
-        // check request sign
-        if err := crypto.CallbackServerVerifyRequestSign(request, platformPublicKey); err != nil {
-            ret.Status = 500
-            log.Println("verify sign fail", err)
-            return ret
-        }
-        
-        // check info according to your needs
-        {
-            var localAmount = "10.0089"
-            if localAmount != request.Data.Amount {
-                ret.Status = 500
-                ret.Data.SuccessData = "amount invalid"
-                return ret
-            }
-        }
-        
-        // return success after all check is OK
-        ret.Status = 200
-        ret.Data.SuccessData = "success"
-        
-        // generate sign for response
-        if sign, err := crypto.CallbackServerGenResponseSignOnly(ret.Data, privateKey); err != nil {
-            ret.Status = 500
-            log.Println("gen sign fail", err)
-            return ret
-        } else {
-            ret.Sign = sign
-        }
-        
-        return ret
-    }))
-    
-    log.Println("Starting server at port 8080")
-    if err := http.ListenAndServe(":8080", nil); err != nil {
-        log.Fatal(err)
-    }
+	http.HandleFunc("/callback/deposit", callback_server.NewHandlerDeposit(func(request callback_server.DepositCallbackRequest) callback_server.DepositCallbackResponse {
+
+		log.Println("get deposit callback", request)
+
+		ret := callback_server.DepositCallbackResponse{}
+
+		// check request sign
+		if err := crypto.CallbackServerVerifyRequestSign(request, platformPublicKey); err != nil {
+			ret.Status = 500
+			log.Println("verify sign fail", err)
+			return ret
+		}
+
+		// check info according to your needs
+		{
+			var localAmount = "10.0089"
+			if localAmount != request.Data.Amount {
+				ret.Status = 500
+				ret.Data.SuccessData = "amount invalid"
+				return ret
+			}
+		}
+
+		// return success after all check is OK
+		ret.Status = 200
+		ret.Data.SuccessData = "success"
+
+		// generate sign for response
+		if sign, err := crypto.CallbackServerGenResponseSignOnly(ret.Data, privateKey); err != nil {
+			ret.Status = 500
+			log.Println("gen sign fail", err)
+			return ret
+		} else {
+			ret.Sign = sign
+		}
+
+		return ret
+	}))
+
+	log.Println("Starting server at port 8080")
+	if err := http.ListenAndServe(":8080", nil); err != nil {
+		log.Fatal(err)
+	}
 }
 ```
 
-> See more example in file `callback_server/server_test.go`.
+> See more example in file `example/server_test.go`.
