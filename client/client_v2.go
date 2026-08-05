@@ -67,12 +67,14 @@ type ClientV2 interface {
 	TrTransfer(ctx context.Context, request TrTransferRequest) (TrTransferResponse, error)
 
 	// TrQueryTransfer looks up the originating VASP of a settled deposit by
-	// txid. Usually answers 618 on the first call. Keep the returned RequestId:
-	// TrPostTransfer requires it.
+	// txid. Usually answers 618 on the first call. Use the returned
+	// OriginatorPubKey to encrypt a following TrPostTransfer; locate that call
+	// by the same txid and coin (RequestId is only for troubleshooting).
 	TrQueryTransfer(ctx context.Context, request TrQueryTransferRequest) (TrQueryTransferResponse, error)
 
 	// TrPostTransfer supplies Travel Rule data for a deposit that settled
-	// without an incoming authorisation.
+	// without an incoming authorisation. Requires txid and coin to hit a
+	// finished TrQueryTransfer result.
 	TrPostTransfer(ctx context.Context, request TrPostTransferRequest) (TrPostTransferResponse, error)
 }
 

@@ -272,27 +272,24 @@ func Test_tr_QueryTransfer_And_PostTransfer(t *testing.T) {
 		t.Fatal("encrypt payload:", err)
 	}
 
-	// Two ways to name the deposit. This one reuses the lookup id, which hits the
-	// result directly:
+	// Locate the completed queryTransfer by the same txid and coin. RequestId from
+	// the lookup is only for troubleshooting; the platform fills CodeVASP's
+	// reverse-lookup id from its task table.
 	request := client.TrPostTransferRequest{
-		VaspId:    trOwnVaspId,
-		RequestId: query.Data.RequestId,
+		VaspId:             trOwnVaspId,
+		Txid:               "abc...",
+		Coin:               "usdt_trc20",
+		BeneficiaryAddress: "Tto...",
 	}
-	// Or locate it by txid, which avoids carrying an id across requests:
-	//
-	//	request := client.TrPostTransferRequest{
-	//	    Txid: "abc...", Coin: "usdt_trc20", BeneficiaryAddress: "Tto...",
-	//	}
-	//
-	// Either way TrQueryTransfer must have run first: this endpoint never starts a
-	// lookup of its own, and answers 615 when there is no result to reuse.
+	// TrQueryTransfer must have run first: this endpoint never starts a lookup of
+	// its own, and answers 615 when there is no result to reuse.
 	encrypted.ApplyToPostTransfer(&request)
 
 	res, err := trClient.TrPostTransfer(context.TODO(), request)
 	if err != nil {
 		t.Fatal("postTransfer:", err)
 	}
-	// TransferId echoes the request id, so reconcile on that. Coin and Contract
+	// TransferId is the platform-local id for this submission. Coin and Contract
 	// are platform names, matching what requests take.
 	t.Logf("postTransfer %s: %s %s %s exceeded=%t",
 		res.Data.TransferId, res.Data.Result, res.Data.Coin, res.Data.Amount, res.Data.IsExceedingThreshold)

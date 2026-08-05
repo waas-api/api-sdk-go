@@ -233,24 +233,21 @@ type TrThresholdDeclaration struct {
 // TrPostTransferRequest supplies Travel Rule data for a deposit that already
 // settled without an incoming authorisation.
 //
-// Two ways to name the deposit: Txid with Coin and BeneficiaryAddress, or the
-// RequestId that TrQueryTransfer returned. Either way TrQueryTransfer must have
-// run first — this endpoint never starts a lookup of its own, because that would
-// put an asynchronous wait inside a data submission. With no reusable lookup
-// result the platform answers 615.
+// Locate the deposit by Txid and Coin (BeneficiaryAddress optional). TrQueryTransfer
+// must have run first — this endpoint never starts a lookup of its own, because
+// that would put an asynchronous wait inside a data submission. With no reusable
+// lookup result the platform answers 615. The CodeVASP reverse-lookup id that
+// AssetTransferDataRequest needs is filled by the platform from its task table;
+// do not send queryTransfer's request_id back.
 type TrPostTransferRequest struct {
 	// VaspId is optional, and must match the own VASP that created the lookup
 	// when set. Omitted, the platform infers the merchant's single enabled VASP.
 	VaspId string `json:"vasp_id,omitempty"`
-	// RequestId is the value returned by TrQueryTransfer. It hits the lookup
-	// result directly, saving a task query. Optional; use the Txid locator when
-	// carrying an id across requests is inconvenient.
-	RequestId string `json:"request_id,omitempty"`
-	// Txid, Coin and BeneficiaryAddress locate the lookup without a RequestId.
-	// The address rules match TrQueryTransfer: omitted, the platform falls back
-	// to the deposit record.
-	Txid               string `json:"txid,omitempty"`
-	Coin               string `json:"coin,omitempty"`
+	// Txid and Coin locate the completed queryTransfer task. They are required.
+	Txid string `json:"txid"`
+	Coin string `json:"coin"`
+	// BeneficiaryAddress is optional. When omitted the platform falls back to
+	// the deposit record for this coin and txid, matching TrQueryTransfer.
 	BeneficiaryAddress string `json:"beneficiary_address,omitempty"`
 	Tag                string `json:"tag,omitempty"`
 	Payload            string `json:"payload"`

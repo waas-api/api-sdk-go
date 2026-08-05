@@ -338,9 +338,10 @@ The SDK does not retry internally: a blocking wait of 10 seconds or more inside
 your request handler is rarely what you want.
 
 `TrPostTransfer` needs a finished lookup, and never starts one itself — that would
-put an asynchronous wait inside a data submission. Locate the deposit either by
-the `RequestId` `TrQueryTransfer` returned, or by `Txid` with `Coin` and
-`BeneficiaryAddress`. With no reusable result the platform answers 615.
+put an asynchronous wait inside a data submission. Locate the deposit by `Txid`
+and `Coin` (`BeneficiaryAddress` optional). The `request_id` from
+`TrQueryTransfer` is only for troubleshooting; do not send it back. With no
+reusable result the platform answers 615.
 
 Encrypt the payload for `OriginatorPubKey` from the lookup result.
 `OriginatorPubKeys` holds every key the platform knows for that VASP, for retrying

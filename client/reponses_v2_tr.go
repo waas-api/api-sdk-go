@@ -209,8 +209,8 @@ func (r TrQueryTransferResponse) hasData() bool { return r.Data != nil }
 
 // TrQueryTransferData is the txid lookup result.
 type TrQueryTransferData struct {
-	// RequestId can be passed to TrPostTransfer to hit this lookup result
-	// directly. Optional there: the txid locator works too.
+	// RequestId identifies the lookup task. Kept for troubleshooting and logs;
+	// TrPostTransfer does not take it — locate that call by txid and coin.
 	RequestId string `json:"request_id"`
 	// OriginatorVaspId is the VASP that sent the deposit. This resolves a sender,
 	// where verifyAddress resolves a beneficiary — hence the different name.
@@ -294,9 +294,8 @@ func (r TrPostTransferResponse) hasData() bool { return r.Data != nil }
 
 // TrPostTransferData is the postTransfer result.
 type TrPostTransferData struct {
-	// TransferId echoes the request's RequestId, not a new platform id. The
-	// platform does mint its own id for the submission record, but does not
-	// return it here, so reconcile this submission by RequestId.
+	// TransferId is the platform-local id for this supplementary submission.
+	// Reconcile on it; relate back to the prior lookup with the request's txid.
 	TransferId string `json:"transfer_id"`
 	// Result is ResultNormal or ResultError, the CodeVASP pair.
 	Result        string `json:"result"`

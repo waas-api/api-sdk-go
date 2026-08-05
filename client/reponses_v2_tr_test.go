@@ -199,6 +199,18 @@ func TestRequestTypesHaveNoNetworkField(t *testing.T) {
 	}
 }
 
+// postTransfer locates the prior queryTransfer by txid+coin; request_id is a
+// merchant-side noise path the platform no longer accepts.
+func TestPostTransferRequestHasNoRequestId(t *testing.T) {
+	requestType := reflect.TypeOf(TrPostTransferRequest{})
+	for i := 0; i < requestType.NumField(); i++ {
+		field := requestType.Field(i)
+		if strings.HasPrefix(field.Tag.Get("json"), "request_id") {
+			t.Errorf("postTransfer still declares request_id (%s); locate by txid and coin instead", field.Name)
+		}
+	}
+}
+
 func TestVaspListDecodesPagedDirectory(t *testing.T) {
 	const body = `{"status":200,"msg":"ok","data":{"items":[{"vasp_id":"code:them","name":"Them","legal_name":"Them Ltd","country_code":"KR","status":"ACTIVE","provider":"code","provider_vasp_id":"them","alliance_name":"code","public_keys":[{"value":"Kay64UG8yvCyLhqU000LxzYeUm0L/hLIl5S8kyKWbdc=","expires_at":"2027-07-24T06:00:00Z"}]}],"page":2,"page_size":50,"total":51}}`
 	var res TrVaspListResponse
@@ -306,7 +318,7 @@ func TestTransferBeneficiaryVaspPassedThrough(t *testing.T) {
 // coin and contract in the postTransfer result are the platform names, so a
 // merchant can look them up in its own coin table.
 func TestPostTransferDecodesFullResult(t *testing.T) {
-	const body = `{"status":200,"data":{"transfer_id":"req-1","result":"normal","reason_type":"","reason_message":"","originator_vasp_id":"code:them","coin":"usdt_trc20","contract":"TRON","amount":"1.2","trade_price":"1.00","trade_currency":"USD","is_exceeding_threshold":true,"payload":"Y2lwaGVy"}}`
+	const body = `{"status":200,"data":{"transfer_id":"local-uuid-1","result":"normal","reason_type":"","reason_message":"","originator_vasp_id":"code:them","coin":"usdt_trc20","contract":"TRON","amount":"1.2","trade_price":"1.00","trade_currency":"USD","is_exceeding_threshold":true,"payload":"Y2lwaGVy"}}`
 	var res TrPostTransferResponse
 	if err := json.Unmarshal([]byte(body), &res); err != nil {
 		t.Fatalf("unmarshal: %v", err)
@@ -315,7 +327,7 @@ func TestPostTransferDecodesFullResult(t *testing.T) {
 	if data == nil {
 		t.Fatal("Data is nil")
 	}
-	if data.TransferId != "req-1" || data.Result != ResultNormal {
+	if data.TransferId != "local-uuid-1" || data.Result != ResultNormal {
 		t.Errorf("envelope fields not decoded: %+v", data)
 	}
 	if data.OriginatorVaspId != "code:them" || data.Coin != "usdt_trc20" || data.Contract != "TRON" {
