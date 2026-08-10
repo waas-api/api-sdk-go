@@ -3,11 +3,14 @@ package client
 // Travel Rule request paths. They are part of the string-to-sign, so they must
 // match what is sent on the wire byte for byte.
 const (
-	pathTrVaspList      path = "/travel_rule/vaspList"
-	pathTrVerifyAddress path = "/travel_rule/verifyAddress"
-	pathTrTransfer      path = "/travel_rule/transfer"
-	pathTrQueryTransfer path = "/travel_rule/queryTransfer"
-	pathTrPostTransfer  path = "/travel_rule/postTransfer"
+	pathTrVaspList      path = "/travelRule/vaspList"
+	pathTrVerifyAddress path = "/travelRule/verifyAddress"
+	pathTrTransfer      path = "/travelRule/transfer"
+	pathTrQueryTransfer path = "/travelRule/queryTransfer"
+	pathTrPostTransfer  path = "/travelRule/postTransfer"
+	pathTrReceiveAudit  path = "/travelRule/receiveAudit"
+	pathTrRate          path = "/travelRule/rate"
+	pathTrHotWallet     path = "/address/hotWallet"
 )
 
 // Beneficiary type declarations. The merchant declares what the receiving side
@@ -249,8 +252,11 @@ type TrPostTransferRequest struct {
 	// BeneficiaryAddress is optional. When omitted the platform falls back to
 	// the deposit record for this coin and txid, matching TrQueryTransfer.
 	BeneficiaryAddress string `json:"beneficiary_address,omitempty"`
-	Tag                string `json:"tag,omitempty"`
-	Payload            string `json:"payload"`
+	// BeneficiaryCountryCode is the beneficiary's country or region code (ISO
+	// 3166-1 alpha-2), at most 10 characters.
+	BeneficiaryCountryCode string `json:"beneficiary_country_code,omitempty"`
+	Tag                    string `json:"tag,omitempty"`
+	Payload                string `json:"payload"`
 	// BeneficiaryPubKey must be the very same base64 key used to encrypt
 	// Payload. Take it from TrQueryTransferData.OriginatorPubKey. The platform
 	// checks it still belongs to the target VASP before sending, which catches a
@@ -282,4 +288,38 @@ func (r *TrTransferRequest) SetThresholdExceeded(exceeded bool) {
 // TrTransferRequest.IsExceedingThreshold.
 func NewThresholdExceeded(exceeded bool) *bool {
 	return &exceeded
+}
+
+// TrReceiveAuditRequest submits the merchant's deposit audit result.
+//
+// After reviewing the Travel Rule information for an inbound deposit, the
+// merchant calls this to inform the platform whether the deposit is accepted or
+// rejected.
+type TrReceiveAuditRequest struct {
+	// WaasOrderId is the WAAS deposit order id, required.
+	WaasOrderId string `json:"waas_order_id"`
+	// Result is the audit decision: "PASS" or "REJECT".
+	Result string `json:"result"`
+	// ReasonType is the rejection reason type, required when Result is REJECT.
+	ReasonType string `json:"reason_type,omitempty"`
+	// ReasonMessage is a human readable rejection reason, optional.
+	ReasonMessage string `json:"reason_message,omitempty"`
+}
+
+// TrRateRequest queries the exchange rate for a coin in a given jurisdiction.
+type TrRateRequest struct {
+	// VaspId is the merchant's VASP ID.
+	VaspId string `json:"vasp_id"`
+	// Coin is the platform coin name (e.g. usdt_trc20).
+	Coin string `json:"coin"`
+	// CountryCode is the ISO 3166-1 alpha-2 country code.
+	CountryCode string `json:"country_code"`
+	// FiatCode is the fiat currency code (e.g. SGD, EUR).
+	FiatCode string `json:"fiat_code"`
+}
+
+// TrHotWalletRequest queries the platform hot wallet address for a coin.
+type TrHotWalletRequest struct {
+	// Coin is the platform coin name (e.g. usdt_trc20).
+	Coin string `json:"coin"`
 }

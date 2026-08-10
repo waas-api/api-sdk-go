@@ -276,10 +276,11 @@ func Test_tr_QueryTransfer_And_PostTransfer(t *testing.T) {
 	// the lookup is only for troubleshooting; the platform fills CodeVASP's
 	// reverse-lookup id from its task table.
 	request := client.TrPostTransferRequest{
-		VaspId:             trOwnVaspId,
-		Txid:               "abc...",
-		Coin:               "usdt_trc20",
-		BeneficiaryAddress: "Tto...",
+		VaspId:                 trOwnVaspId,
+		Txid:                   "abc...",
+		Coin:                   "usdt_trc20",
+		BeneficiaryAddress:     "Tto...",
+		BeneficiaryCountryCode: "KR",
 	}
 	// TrQueryTransfer must have run first: this endpoint never starts a lookup of
 	// its own, and answers 615 when there is no result to reuse.
@@ -293,6 +294,64 @@ func Test_tr_QueryTransfer_And_PostTransfer(t *testing.T) {
 	// are platform names, matching what requests take.
 	t.Logf("postTransfer %s: %s %s %s exceeded=%t",
 		res.Data.TransferId, res.Data.Result, res.Data.Coin, res.Data.Amount, res.Data.IsExceedingThreshold)
+}
+
+// Step 6: submit the deposit audit result after reviewing Travel Rule info.
+func Test_tr_ReceiveAudit(t *testing.T) {
+	skipUnlessConfigured(t)
+
+	// After receiving an inbound transfer callback and reviewing the Travel Rule
+	// information, submit the audit result.
+	res, err := trClient.TrReceiveAudit(context.TODO(), client.TrReceiveAuditRequest{
+		WaasOrderId: "waas-order-20260809-0001",
+		Result:      "PASS",
+	})
+	if err != nil {
+		t.Fatal("receiveAudit:", err)
+	}
+	t.Logf("receiveAudit result=%s", res.Data.Result)
+
+	// Rejecting a deposit:
+	resReject, err := trClient.TrReceiveAudit(context.TODO(), client.TrReceiveAuditRequest{
+		WaasOrderId:   "waas-order-20260809-0002",
+		Result:        "REJECT",
+		ReasonType:    "SANCTION_LIST",
+		ReasonMessage: "originator address is on sanctions list",
+	})
+	if err != nil {
+		t.Fatal("receiveAudit reject:", err)
+	}
+	t.Logf("receiveAudit reject result=%s", resReject.Data.Result)
+}
+
+// Query the exchange rate for threshold calculation.
+func Test_tr_Rate(t *testing.T) {
+	skipUnlessConfigured(t)
+
+	res, err := trClient.TrRate(context.TODO(), client.TrRateRequest{
+		VaspId:      trOwnVaspId,
+		Coin:        "usdt_trc20",
+		CountryCode: "SG",
+		FiatCode:    "SGD",
+	})
+	if err != nil {
+		t.Fatal("rate:", err)
+	}
+	t.Logf("rate: coin=%s fiat=%s source=%s price=%s",
+		res.Data.Coin, res.Data.FiatCode, res.Data.Source, res.Data.Price)
+}
+
+// Query the platform hot wallet address for a coin.
+func Test_tr_HotWallet(t *testing.T) {
+	skipUnlessConfigured(t)
+
+	res, err := trClient.TrHotWallet(context.TODO(), client.TrHotWalletRequest{
+		Coin: "usdt_trc20",
+	})
+	if err != nil {
+		t.Fatal("hotWallet:", err)
+	}
+	t.Logf("hot wallet address: %s", res.Data.Address)
 }
 
 // redisNonceStore sketches the replay protection a merchant must supply.

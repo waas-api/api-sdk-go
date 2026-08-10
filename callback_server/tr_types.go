@@ -9,12 +9,12 @@ import "encoding/json"
 // inbound forwards. Only signature is needed before outbound withdrawals can
 // work; the others carry real traffic once the inbound service is live.
 const (
-	TrPathSignature      = "/v2/travel_rule/signature"
-	TrPathVerifyAddress  = "/v2/travel_rule/callback/verifyAddress"
-	TrPathTransfer       = "/v2/travel_rule/callback/transfer"
-	TrPathTransferResult = "/v2/travel_rule/callback/transferResult"
-	TrPathPostTransfer   = "/v2/travel_rule/callback/postTransfer"
-	TrPathHealth         = "/v2/travel_rule/callback/health"
+	TrPathSignature      = "/v2/travelRule/signature"
+	TrPathVerifyAddress  = "/v2/travelRule/callback/verifyAddress"
+	TrPathTransfer       = "/v2/travelRule/callback/transfer"
+	TrPathTransferResult = "/v2/travelRule/callback/transferResult"
+	TrPathPostTransfer   = "/v2/travelRule/callback/postTransfer"
+	TrPathHealth         = "/v2/travelRule/callback/health"
 )
 
 // Inbound coin mapping.
@@ -114,6 +114,8 @@ type TrVerifyAddressCallbackResponse struct {
 type TrTransferCallbackRequest struct {
 	VaspId     string `json:"vasp_id"`
 	TransferId string `json:"transfer_id"`
+	// ProviderTransferId is the Travel Rule provider's transfer identifier.
+	ProviderTransferId string `json:"provider_transfer_id"`
 	// Coin is the platform coin name, mapped from the counterparty's currency and
 	// network. See the package note on inbound coin mapping.
 	Coin   string `json:"coin"`
@@ -147,6 +149,10 @@ type TrTransferCallbackResponse struct {
 	BeneficiaryVasp json.RawMessage `json:"beneficiary_vasp,omitempty"`
 	// BeneficiaryAddress optionally echoes the resolved address.
 	BeneficiaryAddress string `json:"beneficiary_address,omitempty"`
+	// OriginatorCountryCode is the originator's country code (ISO 3166-1 alpha-2).
+	OriginatorCountryCode string `json:"originator_country_code,omitempty"`
+	// BeneficiaryCountryCode is the beneficiary's country code (ISO 3166-1 alpha-2).
+	BeneficiaryCountryCode string `json:"beneficiary_country_code,omitempty"`
 }
 
 // TrTransferResultCallbackRequest reports the final outcome of a transfer.
@@ -167,6 +173,9 @@ type TrTransferResultCallbackRequest struct {
 	// VaspId is set on inbound results only.
 	VaspId     string `json:"vasp_id"`
 	TransferId string `json:"transfer_id"`
+	// ProviderTransferId is the Travel Rule provider's transfer identifier.
+	// Set on inbound on-chain results only.
+	ProviderTransferId string `json:"provider_transfer_id,omitempty"`
 	// Status is confirmed when reporting an on-chain result, or canceled when
 	// ending a transfer. Empty on an outbound authorisation conclusion.
 	Status string `json:"status"`
@@ -206,6 +215,8 @@ type TrTransferResultCallbackResponse struct {
 type TrPostTransferCallbackRequest struct {
 	VaspId             string `json:"vasp_id"`
 	TransferId         string `json:"transfer_id"`
+	// ProviderTransferId is the Travel Rule provider's transfer identifier.
+	ProviderTransferId string `json:"provider_transfer_id"`
 	Txid               string `json:"txid"`
 	BeneficiaryAddress string `json:"beneficiary_address"`
 	Tag                string `json:"tag,omitempty"`
@@ -234,6 +245,10 @@ type TrPostTransferCallbackResponse struct {
 	TradePrice           string `json:"trade_price,omitempty"`
 	TradeCurrency        string `json:"trade_currency,omitempty"`
 	IsExceedingThreshold *bool  `json:"is_exceeding_threshold,omitempty"`
+	// OriginatorCountryCode is the originator's country code (ISO 3166-1 alpha-2).
+	OriginatorCountryCode string `json:"originator_country_code,omitempty"`
+	// BeneficiaryCountryCode is the beneficiary's country code (ISO 3166-1 alpha-2).
+	BeneficiaryCountryCode string `json:"beneficiary_country_code,omitempty"`
 }
 
 // TrHealthCallbackRequest is the platform's availability probe.

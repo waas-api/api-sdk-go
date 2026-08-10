@@ -49,6 +49,9 @@ var (
 	_ dataCarrier = TrQueryTransferResponse{}
 	_ dataCarrier = TrTransferResponse{}
 	_ dataCarrier = TrPostTransferResponse{}
+	_ dataCarrier = TrReceiveAuditResponse{}
+	_ dataCarrier = TrRateResponse{}
+	_ dataCarrier = TrHotWalletResponse{}
 )
 
 // decodeDataObject decodes the envelope and then the data object, leaving out
@@ -189,6 +192,9 @@ type TrVerifyAddressData struct {
 	// On the synchronous branch the platform echoes the requested value when the
 	// counterparty did not return one.
 	BeneficiaryVaspId string `json:"beneficiary_vasp_id"`
+	// HotWalletAddress is the beneficiary's hot wallet address, returned when
+	// the platform knows it.
+	HotWalletAddress string `json:"hot_wallet_address"`
 }
 
 // TrQueryTransferResponse answers a txid lookup.
@@ -316,4 +322,71 @@ type TrPostTransferData struct {
 	IsExceedingThreshold bool `json:"is_exceeding_threshold"`
 	// Payload is the ciphertext the counterparty supplied. Decrypt it yourself.
 	Payload string `json:"payload"`
+}
+
+// TrReceiveAuditResponse answers a deposit audit submission.
+type TrReceiveAuditResponse struct {
+	ResponseV2
+	Data *TrReceiveAuditData `json:"data"`
+}
+
+// UnmarshalJSON decodes the envelope, leaving Data nil when there is no object.
+func (r *TrReceiveAuditResponse) UnmarshalJSON(raw []byte) error {
+	return decodeDataObject(raw, &r.ResponseV2, &r.Data)
+}
+
+func (r TrReceiveAuditResponse) hasData() bool { return r.Data != nil }
+
+// TrReceiveAuditData is the receiveAudit result.
+type TrReceiveAuditData struct {
+	// Result is "normal" or "error".
+	Result string `json:"result"`
+	// ReasonType is set when Result is "error".
+	ReasonType string `json:"reason_type"`
+	// ReasonMessage gives details when Result is "error".
+	ReasonMessage string `json:"reason_message"`
+}
+
+// TrRateResponse answers a rate query.
+type TrRateResponse struct {
+	ResponseV2
+	Data *TrRateData `json:"data"`
+}
+
+// UnmarshalJSON decodes the envelope, leaving Data nil when there is no object.
+func (r *TrRateResponse) UnmarshalJSON(raw []byte) error {
+	return decodeDataObject(raw, &r.ResponseV2, &r.Data)
+}
+
+func (r TrRateResponse) hasData() bool { return r.Data != nil }
+
+// TrRateData is the rate query result.
+type TrRateData struct {
+	// Coin is the platform coin name.
+	Coin string `json:"coin"`
+	// FiatCode is the fiat currency code.
+	FiatCode string `json:"fiat_code"`
+	// Source is the price source, e.g. "cbc" or "upbit".
+	Source string `json:"source"`
+	// Price is the coin-to-fiat exchange rate as a decimal string.
+	Price string `json:"price"`
+}
+
+// TrHotWalletResponse answers a hot wallet address query.
+type TrHotWalletResponse struct {
+	ResponseV2
+	Data *TrHotWalletData `json:"data"`
+}
+
+// UnmarshalJSON decodes the envelope, leaving Data nil when there is no object.
+func (r *TrHotWalletResponse) UnmarshalJSON(raw []byte) error {
+	return decodeDataObject(raw, &r.ResponseV2, &r.Data)
+}
+
+func (r TrHotWalletResponse) hasData() bool { return r.Data != nil }
+
+// TrHotWalletData is the hot wallet address result.
+type TrHotWalletData struct {
+	// Address is the platform hot wallet address for the queried coin.
+	Address string `json:"address"`
 }

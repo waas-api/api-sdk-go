@@ -76,6 +76,18 @@ type ClientV2 interface {
 	// without an incoming authorisation. Requires txid and coin to hit a
 	// finished TrQueryTransfer result.
 	TrPostTransfer(ctx context.Context, request TrPostTransferRequest) (TrPostTransferResponse, error)
+
+	// TrReceiveAudit submits the merchant's deposit audit result. After
+	// reviewing Travel Rule information for an inbound deposit, the merchant
+	// informs the platform whether the deposit is accepted or rejected.
+	TrReceiveAudit(ctx context.Context, request TrReceiveAuditRequest) (TrReceiveAuditResponse, error)
+
+	// TrRate queries the exchange rate for a coin in a given jurisdiction and
+	// fiat currency. Used to calculate the threshold fiat amount.
+	TrRate(ctx context.Context, request TrRateRequest) (TrRateResponse, error)
+
+	// TrHotWallet queries the platform hot wallet address for a given coin.
+	TrHotWallet(ctx context.Context, request TrHotWalletRequest) (TrHotWalletResponse, error)
 }
 
 // ConfigV2 configures a Travel Rule client.
@@ -162,6 +174,21 @@ func (c *clientV2) TrQueryTransfer(ctx context.Context, request TrQueryTransferR
 
 func (c *clientV2) TrPostTransfer(ctx context.Context, request TrPostTransferRequest) (res TrPostTransferResponse, err error) {
 	err = c.call(ctx, pathTrPostTransfer, request, &res, &res.ResponseV2)
+	return res, err
+}
+
+func (c *clientV2) TrReceiveAudit(ctx context.Context, request TrReceiveAuditRequest) (res TrReceiveAuditResponse, err error) {
+	err = c.call(ctx, pathTrReceiveAudit, request, &res, &res.ResponseV2)
+	return res, err
+}
+
+func (c *clientV2) TrRate(ctx context.Context, request TrRateRequest) (res TrRateResponse, err error) {
+	err = c.call(ctx, pathTrRate, request, &res, &res.ResponseV2)
+	return res, err
+}
+
+func (c *clientV2) TrHotWallet(ctx context.Context, request TrHotWalletRequest) (res TrHotWalletResponse, err error) {
+	err = c.call(ctx, pathTrHotWallet, request, &res, &res.ResponseV2)
 	return res, err
 }
 
