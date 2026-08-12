@@ -312,7 +312,7 @@ independently is a real failure mode. `ApplyToTransfer` sets both:
 ```go
 encrypted, err := client.EncryptPayload(payload, ownEd25519PrivateKey, beneficiaryPubKey)
 if err != nil { /* ... */ }
-encrypted.ApplyToTransfer(&request) // sets Payload and BeneficiaryPubKey together
+encrypted.ApplyToTransfer(&request) // sets Payload and BeneficiaryPublicKey together
 ```
 
 Take `beneficiaryPubKey` from `TrVaspList` and pass it through unchanged: base64
@@ -339,13 +339,10 @@ your request handler is rarely what you want.
 
 `TrPostTransfer` needs a finished lookup, and never starts one itself — that would
 put an asynchronous wait inside a data submission. Locate the deposit by `Txid`
-and `Coin` (`BeneficiaryAddress` optional). The `request_id` from
-`TrQueryTransfer` is only for troubleshooting; do not send it back. With no
-reusable result the platform answers 615.
+and `Coin` (`BeneficiaryAddress` optional). With no reusable result the platform
+answers 615.
 
-Encrypt the payload for `OriginatorPubKey` from the lookup result.
-`OriginatorPubKeys` holds every key the platform knows for that VASP, for retrying
-through a key rotation rather than guessing which one the counterparty holds.
+Encrypt the payload for `OriginatorPublicKey` from the lookup result.
 
 ### Callback server
 

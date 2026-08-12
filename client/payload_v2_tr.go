@@ -13,7 +13,7 @@ import (
 // that encrypted it.
 //
 // The two are kept together because they cannot be sourced independently. The
-// platform puts BeneficiaryPubKey into the CodeVASP request as a key
+// platform puts RemotePublicKey into the request's public-key field as a key
 // identifier, telling the counterparty which of its keys to decrypt with. A
 // NaCl box ciphertext is bound to a specific key pair, so if the merchant
 // encrypted with key A while the header announced key B, the counterparty would
@@ -25,9 +25,9 @@ import (
 type EncryptedPayload struct {
 	// Ciphertext is base64 of "24 byte nonce || box ciphertext".
 	Ciphertext string
-	// BeneficiaryPubKey is the counterparty's base64 Ed25519 public key exactly
+	// RemotePublicKey is the counterparty's base64 Ed25519 public key exactly
 	// as it was used for encryption, case preserved.
-	BeneficiaryPubKey string
+	RemotePublicKey string
 }
 
 // EncryptPayload encrypts an IVMS101 payload for a counterparty.
@@ -66,29 +66,29 @@ func EncryptPayloadBytes(plaintext []byte, ownPrivateKey, remotePubKey string) (
 	return EncryptedPayload{
 		Ciphertext: base64.StdEncoding.EncodeToString(sealed),
 		// Record the key as given, so what goes on the wire is what was used.
-		BeneficiaryPubKey: remotePubKey,
+		RemotePublicKey: remotePubKey,
 	}, nil
 }
 
-// ApplyToTransfer sets both Payload and BeneficiaryPubKey on a transfer request.
+// ApplyToTransfer sets both Payload and BeneficiaryPublicKey on a transfer request.
 func (p EncryptedPayload) ApplyToTransfer(request *TrTransferRequest) {
 	request.Payload = p.Ciphertext
-	request.BeneficiaryPubKey = p.BeneficiaryPubKey
+	request.BeneficiaryPublicKey = p.RemotePublicKey
 }
 
-// ApplyToVerifyAddress sets both Payload and BeneficiaryPubKey on an address
+// ApplyToVerifyAddress sets both Payload and BeneficiaryPublicKey on an address
 // verification request, which switches it to the synchronous branch. That
 // branch also requires BeneficiaryVaspId.
 func (p EncryptedPayload) ApplyToVerifyAddress(request *TrVerifyAddressRequest) {
 	request.Payload = p.Ciphertext
-	request.BeneficiaryPubKey = p.BeneficiaryPubKey
+	request.BeneficiaryPublicKey = p.RemotePublicKey
 }
 
-// ApplyToPostTransfer sets both Payload and BeneficiaryPubKey on a
+// ApplyToPostTransfer sets both Payload and OriginatorPublicKey on a
 // postTransfer request.
 func (p EncryptedPayload) ApplyToPostTransfer(request *TrPostTransferRequest) {
 	request.Payload = p.Ciphertext
-	request.BeneficiaryPubKey = p.BeneficiaryPubKey
+	request.OriginatorPublicKey = p.RemotePublicKey
 }
 
 // DecryptPayload decrypts a base64 ciphertext received from a counterparty and

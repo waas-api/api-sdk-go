@@ -211,6 +211,20 @@ func TestPostTransferRequestHasNoRequestId(t *testing.T) {
 	}
 }
 
+func TestQueryTransferResponseMatchesPlatformContract(t *testing.T) {
+	responseType := reflect.TypeOf(TrQueryTransferData{})
+	removedFields := map[string]bool{
+		"request_id":             true,
+		"originator_public_keys": true,
+	}
+	for i := 0; i < responseType.NumField(); i++ {
+		jsonName := strings.Split(responseType.Field(i).Tag.Get("json"), ",")[0]
+		if removedFields[jsonName] {
+			t.Errorf("queryTransfer response still declares removed field %s", jsonName)
+		}
+	}
+}
+
 func TestVaspListDecodesPagedDirectory(t *testing.T) {
 	const body = `{"status":200,"msg":"ok","data":{"items":[{"vasp_id":"code:them","name":"Them","legal_name":"Them Ltd","country_code":"KR","status":"ACTIVE","provider":"code","provider_vasp_id":"them","alliance_name":"code","public_keys":[{"value":"Kay64UG8yvCyLhqU000LxzYeUm0L/hLIl5S8kyKWbdc=","expires_at":"2027-07-24T06:00:00Z"}]}],"page":2,"page_size":50,"total":51}}`
 	var res TrVaspListResponse
@@ -341,10 +355,9 @@ func TestPostTransferDecodesFullResult(t *testing.T) {
 	}
 }
 
-// queryTransfer returns the key to encrypt the postTransfer payload for, plus the
-// full set for rotation fallback.
-func TestQueryTransferDecodesOriginatorKeys(t *testing.T) {
-	const body = `{"status":200,"data":{"request_id":"r-1","originator_vasp_id":"code:them","result":"valid","reason_type":"","reason_message":"","originator_public_key":"KeyA","originator_public_keys":["KeyA","KeyB"]}}`
+// queryTransfer returns the key to encrypt the postTransfer payload for.
+func TestQueryTransferDecodesOriginatorPublicKey(t *testing.T) {
+	const body = `{"status":200,"data":{"originator_vasp_id":"code:them","result":"valid","reason_type":"","reason_message":"","originator_public_key":"KeyA"}}`
 	var res TrQueryTransferResponse
 	if err := json.Unmarshal([]byte(body), &res); err != nil {
 		t.Fatalf("unmarshal: %v", err)
@@ -352,11 +365,38 @@ func TestQueryTransferDecodesOriginatorKeys(t *testing.T) {
 	if res.Data.OriginatorVaspId != "code:them" {
 		t.Errorf("originator_vasp_id not decoded: %+v", res.Data)
 	}
-	if res.Data.OriginatorPubKey != "KeyA" {
-		t.Errorf("originator_public_key = %q", res.Data.OriginatorPubKey)
+	if res.Data.OriginatorPublicKey != "KeyA" {
+		t.Errorf("originator_public_key = %q", res.Data.OriginatorPublicKey)
 	}
-	if len(res.Data.OriginatorPubKeys) != 2 || res.Data.OriginatorPubKeys[0] != "KeyA" {
-		t.Errorf("originator_public_keys not decoded: %+v", res.Data.OriginatorPubKeys)
+}
+
+func TestEncryptedRequestPublicKeyFieldsMatchPlatformContract(t *testing.T) {
+	tests := []struct {
+		name      string
+		request   any
+		wantField string
+	}{
+		{"verifyAddress", TrVerifyAddressRequest{BeneficiaryPublicKey: "key"}, "beneficiary_public_key"},
+		{"transfer", TrTransferRequest{BeneficiaryPublicKey: "key"}, "beneficiary_public_key"},
+		{"postTransfer", TrPostTransferRequest{OriginatorPublicKey: "key"}, "originator_public_key"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			body, err := json.Marshal(test.request)
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+			var fields map[string]json.RawMessage
+			if err := json.Unmarshal(body, &fields); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if _, ok := fields[test.wantField]; !ok {
+				t.Fatalf("request = %s, missing %s", body, test.wantField)
+			}
+			if _, ok := fields["beneficiary_pubkey"]; ok {
+				t.Fatalf("request still contains removed beneficiary_pubkey: %s", body)
+			}
+		})
 	}
 }
 

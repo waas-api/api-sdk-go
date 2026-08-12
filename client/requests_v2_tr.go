@@ -101,7 +101,7 @@ type TrVaspListRequest struct {
 // TrVerifyAddressRequest either verifies an address against a known VASP or
 // looks up which VASP an address belongs to.
 //
-// BeneficiaryVaspId, Payload and BeneficiaryPubKey are conditionally required
+// BeneficiaryVaspId, Payload and BeneficiaryPublicKey are conditionally required
 // as a group: supply all three to verify synchronously against that VASP, or
 // none of them to run a lookup. Supplying only some returns business status 613
 // rather than guessing the intent.
@@ -117,11 +117,11 @@ type TrVerifyAddressRequest struct {
 	// with the address as "address:tag" when running a wallet lookup.
 	Tag string `json:"tag,omitempty"`
 	// Payload is the base64 NaCl box ciphertext. Set it together with
-	// BeneficiaryPubKey; EncryptedPayload.ApplyToVerifyAddress does both.
+	// BeneficiaryPublicKey; EncryptedPayload.ApplyToVerifyAddress does both.
 	Payload string `json:"payload,omitempty"`
-	// BeneficiaryPubKey must be the very same base64 key used to encrypt
+	// BeneficiaryPublicKey must be the very same base64 key used to encrypt
 	// Payload, byte for byte and case preserved.
-	BeneficiaryPubKey string `json:"beneficiary_pubkey,omitempty"`
+	BeneficiaryPublicKey string `json:"beneficiary_public_key,omitempty"`
 }
 
 // TrQueryTransferRequest looks up the originating VASP of a deposit by txid.
@@ -169,12 +169,12 @@ type TrTransferRequest struct {
 	TradeCurrency string `json:"trade_currency"`
 	// Payload is required only when the route resolves to TR_CODE.
 	Payload string `json:"payload,omitempty"`
-	// BeneficiaryPubKey must be the very same base64 key used to encrypt
+	// BeneficiaryPublicKey must be the very same base64 key used to encrypt
 	// Payload. Use EncryptedPayload.ApplyToTransfer to set both together.
-	BeneficiaryPubKey  string `json:"beneficiary_pubkey,omitempty"`
-	OriginatorAddress  string `json:"originator_address"`
-	BeneficiaryAddress string `json:"beneficiary_address"`
-	Tag                string `json:"tag,omitempty"`
+	BeneficiaryPublicKey string `json:"beneficiary_public_key,omitempty"`
+	OriginatorAddress    string `json:"originator_address"`
+	BeneficiaryAddress   string `json:"beneficiary_address"`
+	Tag                  string `json:"tag,omitempty"`
 	// OriginatorCountryCode is the KYC country of the sending wallet's owner,
 	// ISO 3166-1 alpha-2. The platform records it without validating ownership.
 	OriginatorCountryCode string `json:"originator_country_code,omitempty"`
@@ -257,11 +257,11 @@ type TrPostTransferRequest struct {
 	BeneficiaryCountryCode string `json:"beneficiary_country_code,omitempty"`
 	Tag                    string `json:"tag,omitempty"`
 	Payload                string `json:"payload"`
-	// BeneficiaryPubKey must be the very same base64 key used to encrypt
-	// Payload. Take it from TrQueryTransferData.OriginatorPubKey. The platform
+	// OriginatorPublicKey must be the very same base64 key used to encrypt
+	// Payload. Take it from TrQueryTransferData.OriginatorPublicKey. The platform
 	// checks it still belongs to the target VASP before sending, which catches a
 	// rotated key here rather than as a 422 from the counterparty.
-	BeneficiaryPubKey string `json:"beneficiary_pubkey"`
+	OriginatorPublicKey string `json:"originator_public_key"`
 }
 
 // SetThreshold declares the threshold with full evidence, clearing the boolean

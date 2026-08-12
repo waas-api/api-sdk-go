@@ -215,9 +215,6 @@ func (r TrQueryTransferResponse) hasData() bool { return r.Data != nil }
 
 // TrQueryTransferData is the txid lookup result.
 type TrQueryTransferData struct {
-	// RequestId identifies the lookup task. Kept for troubleshooting and logs;
-	// TrPostTransfer does not take it — locate that call by txid and coin.
-	RequestId string `json:"request_id"`
 	// OriginatorVaspId is the VASP that sent the deposit. This resolves a sender,
 	// where verifyAddress resolves a beneficiary — hence the different name.
 	OriginatorVaspId string `json:"originator_vasp_id"`
@@ -227,13 +224,9 @@ type TrQueryTransferData struct {
 	// ReasonUnknown.
 	ReasonType    string `json:"reason_type"`
 	ReasonMessage string `json:"reason_message"`
-	// OriginatorPubKey is the key to encrypt the TrPostTransfer payload for. It
+	// OriginatorPublicKey is the key to encrypt the TrPostTransfer payload for. It
 	// is the latest expiring key the platform holds for that VASP.
-	OriginatorPubKey string `json:"originator_public_key"`
-	// OriginatorPubKeys is every key the platform holds, most recent first. It
-	// exists for key rotation: if the counterparty cannot decrypt what was
-	// encrypted for OriginatorPubKey, retry down this list rather than guessing.
-	OriginatorPubKeys []string `json:"originator_public_keys"`
+	OriginatorPublicKey string `json:"originator_public_key"`
 }
 
 // TrTransferResponse answers a withdrawal authorisation.

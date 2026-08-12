@@ -197,7 +197,7 @@ func TestClientV2SignsEscapedPathOnly(t *testing.T) {
 	if _, err := c.TrVaspList(context.Background(), TrVaspListRequest{}); err != nil {
 		t.Fatalf("TrVaspList: %v", err)
 	}
-	if captured.path != "/shopapi/v2/travel_rule/vaspList" {
+	if captured.path != "/shopapi/v2/travelRule/vaspList" {
 		t.Errorf("unexpected signed path: %q", captured.path)
 	}
 	if captured.method != http.MethodPost {
@@ -613,13 +613,13 @@ func TestEncryptPayloadBindsCiphertextToPublicKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EncryptPayload: %v", err)
 	}
-	if encrypted.BeneficiaryPubKey != receiverPub {
-		t.Errorf("public key altered:\n got %q\nwant %q", encrypted.BeneficiaryPubKey, receiverPub)
+	if encrypted.RemotePublicKey != receiverPub {
+		t.Errorf("public key altered:\n got %q\nwant %q", encrypted.RemotePublicKey, receiverPub)
 	}
 
 	request := TrTransferRequest{Coin: "usdt_trc20"}
 	encrypted.ApplyToTransfer(&request)
-	if request.Payload != encrypted.Ciphertext || request.BeneficiaryPubKey != receiverPub {
+	if request.Payload != encrypted.Ciphertext || request.BeneficiaryPublicKey != receiverPub {
 		t.Error("ApplyToTransfer must set both payload and public key")
 	}
 

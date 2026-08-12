@@ -263,18 +263,16 @@ func Test_tr_QueryTransfer_And_PostTransfer(t *testing.T) {
 		t.Fatal("queryTransfer:", err)
 	}
 
-	// Encrypt for the key the lookup reported. OriginatorPubKeys holds every key
-	// the platform knows for that VASP, for retrying through a key rotation.
+	// Encrypt for the key the lookup reported.
 	encrypted, err := client.EncryptPayload(&travelrule.IVMS101{
 		Beneficiary: &travelrule.Beneficiary{AccountNumber: []string{"Tto..."}},
-	}, trEd25519PrivateKey, query.Data.OriginatorPubKey)
+	}, trEd25519PrivateKey, query.Data.OriginatorPublicKey)
 	if err != nil {
 		t.Fatal("encrypt payload:", err)
 	}
 
-	// Locate the completed queryTransfer by the same txid and coin. RequestId from
-	// the lookup is only for troubleshooting; the platform fills CodeVASP's
-	// reverse-lookup id from its task table.
+	// Locate the completed queryTransfer by the same txid and coin. The platform
+	// fills CodeVASP's reverse-lookup id from its task table.
 	request := client.TrPostTransferRequest{
 		VaspId:                 trOwnVaspId,
 		Txid:                   "abc...",
