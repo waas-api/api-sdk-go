@@ -432,10 +432,9 @@ func Test_tr_CallbackServer(t *testing.T) {
 					ReasonMessage: "could not decrypt the payload",
 				}
 			}
-			// req.Coin is the platform coin name, the same form the outbound API
-			// takes, so it can go straight into your own coin table. There is no
-			// network field: the name already identifies the chain.
-			_ = req.Coin
+			// possible_coins are candidate main-chain coin names. Check the decrypted
+			// address against each candidate; the platform has not selected a chain.
+			_ = req.PossibleCoins
 			_ = payload // look the account number up in your own address book
 			return callback_server.TrVerifyAddressCallbackResponse{Result: callback_server.TrResultValid}
 		}))
@@ -450,6 +449,11 @@ func Test_tr_CallbackServer(t *testing.T) {
 					Result: callback_server.TrResultDenied, ReasonType: callback_server.TrReasonUnknown,
 				}
 			}
+			// Coin contains one exact match when the provider supplied a network;
+			// PossibleCoins contains candidates when it did not. Resolve candidates
+			// using the payload and beneficiary address before screening.
+			_ = req.Coin
+			_ = req.PossibleCoins
 			_ = payload // run KYC comparison and sanctions screening here
 
 			// Reply with your own identity data, encrypted for the originator.

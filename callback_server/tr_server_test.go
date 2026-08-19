@@ -373,35 +373,59 @@ func TestInvalidBusinessResultIsRejected(t *testing.T) {
 	})
 	rec := httptest.NewRecorder()
 	handler(rec, signedCallback(t, platformPrivate, TrPathVerifyAddress,
-		[]byte(`{"vasp_id":"code:me","coin":"usdt_trc20"}`), "0123456789abcdef", time.Now()))
+		[]byte(`{"vasp_id":"code:me","possible_coins":["TRX","ETH"]}`), "0123456789abcdef", time.Now()))
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
 	}
 }
 
-// Inbound callbacks carry the platform coin name, not the provider's currency,
-// and no network field. A bare "USDT" in a merchant's own coin table cannot
-// distinguish TRC20 from ERC20, so the platform resolves the chain first.
-func TestInboundCallbacksCarryPlatformCoinAndNoNetwork(t *testing.T) {
+// Inbound callbacks carry platform coin names, not the provider's currency, and
+// no network field. The platform sends one exact coin when the provider supplies
+// a network and a candidate list when it does not.
+func TestInboundCallbacksCarryMappedCoinsAndNoNetwork(t *testing.T) {
 	platformPrivate, platformPublic := rsaPair(t)
 	server := newTestServer(t, platformPublic, newMemoryNonceStore())
+
+	var verifyAddress TrVerifyAddressCallbackRequest
+	verifyAddressHandler := server.HandleVerifyAddress(func(req TrVerifyAddressCallbackRequest) TrVerifyAddressCallbackResponse {
+		verifyAddress = req
+		return TrVerifyAddressCallbackResponse{Result: TrResultValid}
+	})
+	verifyAddressBody := []byte(`{"vasp_id":"code:me","possible_coins":["TRX","ETH"],"originator_vasp_id":"code:them","originator_public_key":"KeyA","payload":"Y2lwaGVy"}`)
+	rec := httptest.NewRecorder()
+	verifyAddressHandler(rec, signedCallback(t, platformPrivate, TrPathVerifyAddress, verifyAddressBody, "nonceverifyaddress1", time.Now()))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("verifyAddress status = %d, want 200; body: %s", rec.Code, rec.Body)
+	}
+	if !reflect.DeepEqual(verifyAddress.PossibleCoins, []string{"TRX", "ETH"}) {
+		t.Errorf("verifyAddress possible_coins = %v, want [TRX ETH]", verifyAddress.PossibleCoins)
+	}
 
 	var transfer TrTransferCallbackRequest
 	transferHandler := server.HandleTransfer(func(req TrTransferCallbackRequest) TrTransferCallbackResponse {
 		transfer = req
 		return TrTransferCallbackResponse{Result: TrResultVerified}
 	})
-	// The network the counterparty sent is consumed platform side to resolve the
-	// coin and not forwarded, so an unrecognised field here must be ignored rather
-	// than break decoding.
+	// A supplied network is consumed platform side to resolve one coin and is not
+	// forwarded, so an unrecognised network field must not break decoding.
 	body := []byte(`{"vasp_id":"code:me","transfer_id":"t-1","coin":"usdt_trc20","amount":"1.2","trade_price":"1.00","trade_currency":"USD","is_exceeding_threshold":true,"originator_vasp_id":"code:them","originator_public_key":"KeyA","payload":"Y2lwaGVy","beneficiary_address":"Tto","network":"TRON"}`)
-	rec := httptest.NewRecorder()
+	rec = httptest.NewRecorder()
 	transferHandler(rec, signedCallback(t, platformPrivate, TrPathTransfer, body, "noncenoncetransfer1", time.Now()))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body: %s", rec.Code, rec.Body)
 	}
 	if transfer.Coin != "usdt_trc20" {
 		t.Errorf("coin = %q, want the platform coin name", transfer.Coin)
+	}
+
+	body = []byte(`{"vasp_id":"code:me","transfer_id":"t-2","possible_coins":["usdt_trc20","usdt_erc20"],"amount":"1.2","originator_vasp_id":"code:them","originator_public_key":"KeyA","payload":"Y2lwaGVy","beneficiary_address":"Tto"}`)
+	rec = httptest.NewRecorder()
+	transferHandler(rec, signedCallback(t, platformPrivate, TrPathTransfer, body, "noncenoncetransfer2", time.Now()))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("candidate transfer status = %d, want 200; body: %s", rec.Code, rec.Body)
+	}
+	if transfer.Coin != "" || !reflect.DeepEqual(transfer.PossibleCoins, []string{"usdt_trc20", "usdt_erc20"}) {
+		t.Errorf("candidate transfer coins = coin %q, possible_coins %v", transfer.Coin, transfer.PossibleCoins)
 	}
 
 	// Asserted on the type rather than on marshalled output: an omitempty field
@@ -440,7 +464,7 @@ func TestCallbackResponsesUseReasonMessageOnly(t *testing.T) {
 				}
 			}),
 			path: TrPathVerifyAddress,
-			body: `{"vasp_id":"code:me","coin":"usdt_trc20","payload":"Y2lwaGVy"}`,
+			body: `{"vasp_id":"code:me","possible_coins":["TRX","ETH"],"payload":"Y2lwaGVy"}`,
 		},
 		"transfer": {
 			handler: server.HandleTransfer(func(TrTransferCallbackRequest) TrTransferCallbackResponse {
@@ -449,7 +473,7 @@ func TestCallbackResponsesUseReasonMessageOnly(t *testing.T) {
 				}
 			}),
 			path: TrPathTransfer,
-			body: `{"vasp_id":"code:me","transfer_id":"t-1","coin":"usdt_trc20","payload":"Y2lwaGVy"}`,
+			body: `{"vasp_id":"code:me","transfer_id":"t-1","possible_coins":["usdt_trc20","usdt_erc20"],"payload":"Y2lwaGVy"}`,
 		},
 		"transferResult": {
 			handler: server.HandleTransferResult(func(TrTransferResultCallbackRequest) TrTransferResultCallbackResponse {

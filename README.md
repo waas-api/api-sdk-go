@@ -216,9 +216,10 @@ Five methods: `TrVaspList`, `TrVerifyAddress`, `TrTransfer`, `TrQueryTransfer`,
 `TrPostTransfer`.
 
 `coin` is the platform coin name, which already identifies the chain (for example
-`usdt_trc20`). Nothing carries a `network` field, in either direction: the
-platform maps between its own coin names and the provider's currency and network
-on both the outbound and inbound sides. A coin with no usable mapping returns 612.
+`usdt_trc20`). Requests do not carry a separate `network` field. For inbound
+callbacks, the platform sends `coin` when the provider supplied a network and
+the platform resolved one exact match; otherwise it sends all usable candidates
+in `possible_coins`. A currency with no usable mapping returns 612.
 
 Check the error before touching `res.Data`. On any non-200 business status the
 platform sends no data object, so `Data` is nil and the status arrives as an
@@ -379,14 +380,14 @@ Points worth knowing:
   the inbound request against. Never use the public key from a raw inbound
   header: it is attacker supplied, and verifying a signature with it proves
   nothing.
-- **`coin` is the platform coin name here too**, matching the outbound API. The
-  counterparty sends the provider's currency and network (`USDT` plus `TRON`) and
-  the platform resolves that to one platform coin before forwarding, so no
-  callback carries a `network` field. A `coin` you return on a postTransfer reply
-  is mapped back the other way before the counterparty sees it. When the platform
-  has no mapping for what the counterparty named, it refuses without calling you:
-  transfer answers denied and verifyAddress answers invalid, both with
-  `NOT_SUPPORTED_SYMBOL`.
+- **Inbound callbacks carry resolved coins or candidate sets.** `verifyAddress`
+  supplies candidate main-chain names in `possible_coins`, which must each be
+  checked against the decrypted address. `transfer` supplies either one exact
+  platform `coin` when the counterparty sent a network, or configured deposit
+  coin candidates in `possible_coins` when it did not. A `coin` in a postTransfer
+  reply is mapped back before the counterparty sees it. When no usable candidate
+  exists, the platform refuses with `NOT_SUPPORTED_SYMBOL` without calling the
+  merchant callback.
 - **`signature` sits on the critical path.** It is called before every outbound
   CodeVASP request, including each poll of an in-flight lookup. Roughly 100
   concurrent lookups produce about 10 calls per second, with a 3 second timeout.
