@@ -2,7 +2,7 @@ package callback_server
 
 import "encoding/json"
 
-// Relative paths of the six endpoints a merchant exposes. They are appended to
+// Relative paths of the seven endpoints a merchant exposes. They are appended to
 // the webhook base URL registered with the platform.
 //
 // Suggested build order: signature first, then transferResult, then the four
@@ -14,6 +14,7 @@ const (
 	TrPathTransfer       = "/v2/travelRule/callback/transfer"
 	TrPathTransferResult = "/v2/travelRule/callback/transferResult"
 	TrPathPostTransfer   = "/v2/travelRule/callback/postTransfer"
+	TrPathAddressRegion  = "/v2/travelRule/callback/addressRegion"
 	TrPathHealth         = "/v2/travelRule/callback/health"
 )
 
@@ -250,6 +251,29 @@ type TrPostTransferCallbackResponse struct {
 	OriginatorCountryCode string `json:"originator_country_code,omitempty"`
 	// BeneficiaryCountryCode is the beneficiary's country code (ISO 3166-1 alpha-2).
 	BeneficiaryCountryCode string `json:"beneficiary_country_code,omitempty"`
+}
+
+// TrAddressRegionCallbackRequest asks for the jurisdiction of the customer
+// associated with an address.
+type TrAddressRegionCallbackRequest struct {
+	// VaspId is the merchant's own platform VASP id. The platform currently
+	// includes it for identification but does not otherwise use it.
+	VaspId string `json:"vasp_id"`
+	// Address is the merchant customer address. For memo or tag based chains it
+	// contains the memo or tag, rather than the shared cold-wallet address.
+	Address string `json:"address"`
+	// UserId may be empty when the address is not bound to a merchant user id.
+	UserId string `json:"user_id,omitempty"`
+	// Contract is the main coin name for the address network. Shared EVM
+	// addresses use eth.
+	Contract string `json:"contract"`
+}
+
+// TrAddressRegionCallbackResponse returns the customer's jurisdiction code.
+// Region may be empty when the merchant cannot determine the jurisdiction.
+type TrAddressRegionCallbackResponse struct {
+	Region        string `json:"region"`
+	ReasonMessage string `json:"reason_message"`
 }
 
 // TrHealthCallbackRequest is the platform's availability probe.

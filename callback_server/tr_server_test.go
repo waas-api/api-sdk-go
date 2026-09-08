@@ -444,6 +444,52 @@ func TestInboundCallbacksCarryMappedCoinsAndNoNetwork(t *testing.T) {
 	}
 }
 
+func TestHandleAddressRegion(t *testing.T) {
+	platformPrivate, platformPublic := rsaPair(t)
+	server := newTestServer(t, platformPublic, newMemoryNonceStore())
+
+	var received TrAddressRegionCallbackRequest
+	handler := server.HandleAddressRegion(func(req TrAddressRegionCallbackRequest) TrAddressRegionCallbackResponse {
+		received = req
+		return TrAddressRegionCallbackResponse{Region: "KR"}
+	})
+	body := []byte(`{"vasp_id":"code:me","address":"12345","user_id":"user-1","contract":"xrp"}`)
+	rec := httptest.NewRecorder()
+	handler(rec, signedCallback(t, platformPrivate, TrPathAddressRegion, body,
+		"nonceaddressregion", time.Now()))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body: %s", rec.Code, rec.Body)
+	}
+	if received.VaspId != "code:me" || received.Address != "12345" ||
+		received.UserId != "user-1" || received.Contract != "xrp" {
+		t.Errorf("request fields lost: %+v", received)
+	}
+	if got, want := rec.Body.String(), `{"region":"KR","reason_message":""}`; got != want {
+		t.Errorf("response = %s, want %s", got, want)
+	}
+}
+
+func TestHandleAddressRegionAllowsUnknownRegion(t *testing.T) {
+	platformPrivate, platformPublic := rsaPair(t)
+	server := newTestServer(t, platformPublic, newMemoryNonceStore())
+
+	handler := server.HandleAddressRegion(func(TrAddressRegionCallbackRequest) TrAddressRegionCallbackResponse {
+		return TrAddressRegionCallbackResponse{ReasonMessage: "jurisdiction unavailable"}
+	})
+	body := []byte(`{"vasp_id":"code:me","address":"0xasdf123","contract":"eth"}`)
+	rec := httptest.NewRecorder()
+	handler(rec, signedCallback(t, platformPrivate, TrPathAddressRegion, body,
+		"unknownaddrregion", time.Now()))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body: %s", rec.Code, rec.Body)
+	}
+	if got, want := rec.Body.String(), `{"region":"","reason_message":"jurisdiction unavailable"}`; got != want {
+		t.Errorf("response = %s, want %s", got, want)
+	}
+}
+
 // Every callback response must name the reason field reason_message and nothing
 // else. The platform reads only that name, so any other one loses the detail
 // silently — no error, just an empty reason reaching the counterparty.
@@ -492,6 +538,13 @@ func TestCallbackResponsesUseReasonMessageOnly(t *testing.T) {
 			}),
 			path: TrPathPostTransfer,
 			body: `{"vasp_id":"code:me","transfer_id":"t-1","txid":"0xabc","payload":"Y2lwaGVy"}`,
+		},
+		"addressRegion": {
+			handler: server.HandleAddressRegion(func(TrAddressRegionCallbackRequest) TrAddressRegionCallbackResponse {
+				return TrAddressRegionCallbackResponse{ReasonMessage: detail}
+			}),
+			path: TrPathAddressRegion,
+			body: `{"vasp_id":"code:me","address":"0xasdf123","contract":"eth"}`,
 		},
 	}
 
@@ -611,6 +664,8 @@ func TestNoCallbackTypeCarriesLegacyReasonField(t *testing.T) {
 		reflect.TypeOf(TrTransferResultCallbackResponse{}),
 		reflect.TypeOf(TrPostTransferCallbackRequest{}),
 		reflect.TypeOf(TrPostTransferCallbackResponse{}),
+		reflect.TypeOf(TrAddressRegionCallbackRequest{}),
+		reflect.TypeOf(TrAddressRegionCallbackResponse{}),
 	}
 	for _, callbackType := range types {
 		for i := 0; i < callbackType.NumField(); i++ {

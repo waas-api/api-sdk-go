@@ -149,6 +149,27 @@ func (s *TrServer) HandlePostTransfer(
 	}
 }
 
+// HandleAddressRegion serves the customer address jurisdiction callback.
+//
+// The business function should return the jurisdiction code associated with
+// the address, or an empty Region when it cannot determine one. The platform
+// does not retry this callback, so keep the lookup within its timeout.
+func (s *TrServer) HandleAddressRegion(
+	business func(TrAddressRegionCallbackRequest) TrAddressRegionCallbackResponse,
+) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		body, ok := s.readAndVerify(w, r)
+		if !ok {
+			return
+		}
+		var request TrAddressRegionCallbackRequest
+		if !s.decode(w, body, &request) {
+			return
+		}
+		s.writeJson(w, business(request))
+	}
+}
+
 // HandleHealth serves the health probe, answering 200 when healthy and 503
 // otherwise.
 //
