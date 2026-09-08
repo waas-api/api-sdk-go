@@ -477,19 +477,11 @@ func Test_tr_CallbackServer(t *testing.T) {
 	// Two different flows arrive here, carrying different fields.
 	mux.Handle(callback_server.TrPathTransferResult, server.HandleTransferResult(
 		func(req callback_server.TrTransferResultCallbackRequest) callback_server.TrTransferResultCallbackResponse {
-			if req.IsOutboundAuthorization() {
-				// The authorisation conclusion for one of our own withdrawals.
-				log.Printf("withdrawal %s authorisation=%s %s",
-					req.TransferId, req.Result, req.ReasonMessage)
-				if req.Payload != "" {
-					// The counterparty's identity data, encrypted for the key we
-					// used on the transfer.
-					_ = req.Payload
-				}
-			} else {
-				// An inbound on-chain result forwarded from the counterparty.
-				log.Printf("transfer %s status=%s txid=%s", req.TransferId, req.Status, req.Txid)
-			}
+			// An inbound on-chain result forwarded from the counterparty.
+			// Withdrawal authorisation results are returned synchronously by
+			// the platform transfer endpoint and do not arrive here.
+			log.Printf("transfer %s provider_transfer_id=%s status=%s txid=%s",
+				req.TransferId, req.ProviderTransferId, req.Status, req.Txid)
 			return callback_server.TrTransferResultCallbackResponse{Result: callback_server.TrResultNormal}
 		}))
 

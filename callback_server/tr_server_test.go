@@ -582,6 +582,28 @@ func TestHandleHealthReportsUnhealthyAs503(t *testing.T) {
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusServiceUnavailable)
 	}
+	if got, want := rec.Body.String(), `{"status":"ERROR"}`; got != want {
+		t.Errorf("response = %s, want %s", got, want)
+	}
+}
+
+func TestHandleHealthDefaultsToDocumentedStatus(t *testing.T) {
+	platformPrivate, platformPublic := rsaPair(t)
+	server := newTestServer(t, platformPublic, newMemoryNonceStore())
+
+	handler := server.HandleHealth(func(TrHealthCallbackRequest) TrHealthCallbackResponse {
+		return TrHealthCallbackResponse{Healthy: true}
+	})
+	rec := httptest.NewRecorder()
+	handler(rec, signedCallback(t, platformPrivate, TrPathHealth,
+		[]byte(`{"vasp_id":"code:me"}`), "healthycallback1", time.Now()))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got, want := rec.Body.String(), `{"status":"OK"}`; got != want {
+		t.Errorf("response = %s, want %s", got, want)
+	}
 }
 
 // A signer switched to the wrong key still returns a signature, so health must
@@ -598,103 +620,90 @@ func TestHealthCheckSignerDetectsWrongKey(t *testing.T) {
 	}
 }
 
-// Two different flows deliver to the transferResult path with different fields.
-// Both must decode, and they must be distinguishable, or a merchant cannot tell
-// verified from denied on its own withdrawals.
-func TestTransferResultHandlesBothShapes(t *testing.T) {
+func TestTransferResultDecodesDocumentedFields(t *testing.T) {
 	platformPrivate, platformPublic := rsaPair(t)
 	server := newTestServer(t, platformPublic, newMemoryNonceStore())
 
-	var received []TrTransferResultCallbackRequest
+	var received TrTransferResultCallbackRequest
 	handler := server.HandleTransferResult(func(req TrTransferResultCallbackRequest) TrTransferResultCallbackResponse {
-		received = append(received, req)
+		received = req
 		return TrTransferResultCallbackResponse{Result: TrResultNormal}
 	})
 
-	// Inbound on-chain result, forwarded from the counterparty.
-	inbound := []byte(`{"vasp_id":"code:me","transfer_id":"t-1","status":"confirmed","txid":"0xabc","vout":"0"}`)
+	body := []byte(`{"vasp_id":"code:me","transfer_id":"t-1","provider_transfer_id":"provider-1","status":"canceled","txid":"0xabc","vout":"0","reason_type":"UNKNOWN"}`)
 	rec := httptest.NewRecorder()
-	handler(rec, signedCallback(t, platformPrivate, TrPathTransferResult, inbound, "noncenonceinbound1", time.Now()))
+	handler(rec, signedCallback(t, platformPrivate, TrPathTransferResult, body,
+		"documentedresult", time.Now()))
 	if rec.Code != http.StatusOK {
-		t.Fatalf("inbound status = %d, want 200; body: %s", rec.Code, rec.Body)
+		t.Fatalf("status = %d, want 200; body: %s", rec.Code, rec.Body)
 	}
-
-	// Authorisation conclusion for one of the merchant's own withdrawals.
-	outbound := []byte(`{"transfer_id":"t-2","result":"verified","reason_type":"","reason_message":"","payload":"Y2lwaGVy"}`)
-	rec = httptest.NewRecorder()
-	handler(rec, signedCallback(t, platformPrivate, TrPathTransferResult, outbound, "noncenonceoutbound", time.Now()))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("outbound status = %d, want 200; body: %s", rec.Code, rec.Body)
-	}
-
-	if len(received) != 2 {
-		t.Fatalf("business function ran %d times, want 2", len(received))
-	}
-
-	first := received[0]
-	if first.Status != "confirmed" || first.Txid != "0xabc" || first.Vout != "0" {
-		t.Errorf("inbound fields lost: %+v", first)
-	}
-	if first.IsOutboundAuthorization() {
-		t.Error("inbound result misclassified as an outbound authorisation")
-	}
-
-	second := received[1]
-	if second.Result != TrResultVerified {
-		t.Errorf("outbound result lost: %+v", second)
-	}
-	if second.Payload != "Y2lwaGVy" {
-		t.Errorf("outbound payload lost: %q", second.Payload)
-	}
-	if !second.IsOutboundAuthorization() {
-		t.Error("outbound authorisation misclassified as an inbound result")
+	if received.VaspId != "code:me" || received.TransferId != "t-1" ||
+		received.ProviderTransferId != "provider-1" || received.Status != "canceled" ||
+		received.Txid != "0xabc" || received.Vout != "0" || received.ReasonType != TrReasonUnknown {
+		t.Errorf("request fields lost: %+v", received)
 	}
 }
 
-// reason_message is the only name on the merchant contract, in both directions.
-// Asserted across every type at once, because a single type diverging is exactly
-// what a per-type assertion would miss.
-func TestNoCallbackTypeCarriesLegacyReasonField(t *testing.T) {
-	types := []reflect.Type{
-		reflect.TypeOf(TrVerifyAddressCallbackRequest{}),
-		reflect.TypeOf(TrVerifyAddressCallbackResponse{}),
-		reflect.TypeOf(TrTransferCallbackRequest{}),
-		reflect.TypeOf(TrTransferCallbackResponse{}),
-		reflect.TypeOf(TrTransferResultCallbackRequest{}),
-		reflect.TypeOf(TrTransferResultCallbackResponse{}),
-		reflect.TypeOf(TrPostTransferCallbackRequest{}),
-		reflect.TypeOf(TrPostTransferCallbackResponse{}),
-		reflect.TypeOf(TrAddressRegionCallbackRequest{}),
-		reflect.TypeOf(TrAddressRegionCallbackResponse{}),
+func TestCallbackSchemasMatchDocumentation(t *testing.T) {
+	tests := []struct {
+		name   string
+		typeOf reflect.Type
+		want   []string
+	}{
+		{"signature request", reflect.TypeOf(TrSignatureRequest{}), []string{"vasp_id", "message", "operation"}},
+		{"signature response", reflect.TypeOf(TrSignatureResponse{}), []string{"signature"}},
+		{"verifyAddress request", reflect.TypeOf(TrVerifyAddressCallbackRequest{}), []string{"vasp_id", "possible_coins", "originator_vasp_id", "originator_public_key", "payload"}},
+		{"verifyAddress response", reflect.TypeOf(TrVerifyAddressCallbackResponse{}), []string{"result", "reason_type", "reason_message"}},
+		{"transfer request", reflect.TypeOf(TrTransferCallbackRequest{}), []string{"vasp_id", "transfer_id", "provider_transfer_id", "coin", "possible_coins", "amount", "historical_cost", "trade_price", "trade_currency", "is_exceeding_threshold", "originating_vasp", "originator_vasp_id", "originator_public_key", "payload", "beneficiary_address", "tag"}},
+		{"transfer response", reflect.TypeOf(TrTransferCallbackResponse{}), []string{"result", "reason_type", "reason_message", "beneficiary_address", "beneficiary_tag", "beneficiary_vasp", "payload", "originator_country_code", "beneficiary_country_code"}},
+		{"transferResult request", reflect.TypeOf(TrTransferResultCallbackRequest{}), []string{"vasp_id", "transfer_id", "provider_transfer_id", "status", "txid", "vout", "reason_type"}},
+		{"transferResult response", reflect.TypeOf(TrTransferResultCallbackResponse{}), []string{"result", "reason_type", "reason_message"}},
+		{"postTransfer request", reflect.TypeOf(TrPostTransferCallbackRequest{}), []string{"vasp_id", "transfer_id", "provider_transfer_id", "txid", "beneficiary_address", "tag", "beneficiary_vasp_id", "beneficiary_public_key", "payload"}},
+		{"postTransfer response", reflect.TypeOf(TrPostTransferCallbackResponse{}), []string{"result", "reason_type", "reason_message", "coin", "amount", "historical_cost", "trade_price", "trade_currency", "is_exceeding_threshold", "payload", "originator_country_code", "beneficiary_country_code"}},
+		{"addressRegion request", reflect.TypeOf(TrAddressRegionCallbackRequest{}), []string{"vasp_id", "address", "user_id", "contract"}},
+		{"addressRegion response", reflect.TypeOf(TrAddressRegionCallbackResponse{}), []string{"region", "reason_message"}},
+		{"health request", reflect.TypeOf(TrHealthCallbackRequest{}), []string{"vasp_id"}},
+		{"health response", reflect.TypeOf(TrHealthCallbackResponse{}), []string{"status"}},
 	}
-	for _, callbackType := range types {
-		for i := 0; i < callbackType.NumField(); i++ {
-			field := callbackType.Field(i)
-			if strings.HasPrefix(field.Tag.Get("json"), "reason_msg") {
-				t.Errorf("%s.%s is tagged reason_msg; the merchant contract only has reason_message",
-					callbackType.Name(), field.Name)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var got []string
+			for i := 0; i < test.typeOf.NumField(); i++ {
+				name := strings.Split(test.typeOf.Field(i).Tag.Get("json"), ",")[0]
+				if name != "" && name != "-" {
+					got = append(got, name)
+				}
 			}
-		}
+			if !reflect.DeepEqual(got, test.want) {
+				t.Errorf("JSON fields = %v, want %v", got, test.want)
+			}
+		})
 	}
 }
 
-// The outbound authorisation conclusion must decode its reason from
-// reason_message. Any other name leaves ReasonMessage empty, so a merchant cannot
-// see why the counterparty refused the withdrawal.
-func TestTransferResultDecodesReasonMessage(t *testing.T) {
-	var request TrTransferResultCallbackRequest
-	body := `{"transfer_id":"t-1","result":"denied","reason_type":"SANCTION_LIST","reason_message":"sanctions hit"}`
-	if err := json.Unmarshal([]byte(body), &request); err != nil {
-		t.Fatalf("unmarshal: %v", err)
+func TestCallbackResponsesKeepDocumentedEmptyFields(t *testing.T) {
+	tests := []struct {
+		name     string
+		response any
+		want     string
+	}{
+		{"verifyAddress", TrVerifyAddressCallbackResponse{}, `{"result":"","reason_type":"","reason_message":""}`},
+		{"transfer", TrTransferCallbackResponse{}, `{"result":"","reason_type":"","reason_message":"","beneficiary_address":"","beneficiary_tag":"","beneficiary_vasp":null,"payload":"","originator_country_code":"","beneficiary_country_code":""}`},
+		{"transferResult", TrTransferResultCallbackResponse{}, `{"result":"","reason_type":"","reason_message":""}`},
+		{"postTransfer", TrPostTransferCallbackResponse{}, `{"result":"","reason_type":"","reason_message":"","coin":"","amount":"","historical_cost":"","trade_price":"","trade_currency":"","is_exceeding_threshold":false,"payload":"","originator_country_code":"","beneficiary_country_code":""}`},
+		{"addressRegion", TrAddressRegionCallbackResponse{}, `{"region":"","reason_message":""}`},
+		{"health", TrHealthCallbackResponse{}, `{"status":""}`},
 	}
-	if request.ReasonMessage != "sanctions hit" {
-		t.Errorf("ReasonMessage = %q, want %q", request.ReasonMessage, "sanctions hit")
-	}
-	if request.ReasonType != "SANCTION_LIST" {
-		t.Errorf("ReasonType = %q", request.ReasonType)
-	}
-	if !request.IsOutboundAuthorization() {
-		t.Error("a body with result and no status must classify as an outbound authorisation")
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			body, err := json.Marshal(test.response)
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+			if got := string(body); got != test.want {
+				t.Errorf("response = %s, want %s", got, test.want)
+			}
+		})
 	}
 }
 

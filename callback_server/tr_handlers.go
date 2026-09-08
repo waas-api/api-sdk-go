@@ -101,8 +101,8 @@ func (s *TrServer) HandleTransfer(
 	}
 }
 
-// HandleTransferResult serves the transfer result callback, which reports either
-// an authorisation conclusion on a withdrawal or an on-chain txid on a deposit.
+// HandleTransferResult serves the inbound transfer result callback, which
+// reports a confirmed or canceled on-chain transfer.
 //
 // This one is retried more than once, and the protocol requires it to be
 // idempotent: the same transfer id, status, txid and vout must always produce
@@ -197,7 +197,7 @@ func (s *TrServer) HandleHealth(
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			w.WriteHeader(http.StatusServiceUnavailable)
 			if response.Status == "" {
-				response.Status = "error"
+				response.Status = "ERROR"
 			}
 			body, err := json.Marshal(response)
 			if err != nil {
@@ -208,7 +208,7 @@ func (s *TrServer) HandleHealth(
 			return
 		}
 		if response.Status == "" {
-			response.Status = "ok"
+			response.Status = "OK"
 		}
 		s.writeJson(w, response)
 	}

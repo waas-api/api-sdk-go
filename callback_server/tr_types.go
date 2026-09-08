@@ -103,8 +103,8 @@ type TrVerifyAddressCallbackRequest struct {
 // TrVerifyAddressCallbackResponse answers with TrResultValid or TrResultInvalid.
 type TrVerifyAddressCallbackResponse struct {
 	Result        string `json:"result"`
-	ReasonType    string `json:"reason_type,omitempty"`
-	ReasonMessage string `json:"reason_message,omitempty"`
+	ReasonType    string `json:"reason_type"`
+	ReasonMessage string `json:"reason_message"`
 }
 
 // TrTransferCallbackRequest asks the merchant to authorise an incoming
@@ -143,80 +143,55 @@ type TrTransferCallbackRequest struct {
 // plus the merchant's own encrypted IVMS101.
 type TrTransferCallbackResponse struct {
 	Result        string `json:"result"`
-	ReasonType    string `json:"reason_type,omitempty"`
-	ReasonMessage string `json:"reason_message,omitempty"`
+	ReasonType    string `json:"reason_type"`
+	ReasonMessage string `json:"reason_message"`
+	// BeneficiaryAddress is the resolved receiving address.
+	BeneficiaryAddress string `json:"beneficiary_address"`
+	// BeneficiaryTag is the resolved memo, tag or other address identifier.
+	BeneficiaryTag string `json:"beneficiary_tag"`
+	// BeneficiaryVasp carries the IVMS101 beneficiaryVasp object.
+	BeneficiaryVasp json.RawMessage `json:"beneficiary_vasp"`
 	// Payload is the merchant's IVMS101, encrypted for the originator.
-	Payload string `json:"payload,omitempty"`
-	// BeneficiaryVasp optionally carries the IVMS101 beneficiaryVasp object.
-	BeneficiaryVasp json.RawMessage `json:"beneficiary_vasp,omitempty"`
-	// BeneficiaryAddress optionally echoes the resolved address.
-	BeneficiaryAddress string `json:"beneficiary_address,omitempty"`
+	Payload string `json:"payload"`
 	// OriginatorCountryCode is the originator's country code (ISO 3166-1 alpha-2).
-	OriginatorCountryCode string `json:"originator_country_code,omitempty"`
+	OriginatorCountryCode string `json:"originator_country_code"`
 	// BeneficiaryCountryCode is the beneficiary's country code (ISO 3166-1 alpha-2).
-	BeneficiaryCountryCode string `json:"beneficiary_country_code,omitempty"`
+	BeneficiaryCountryCode string `json:"beneficiary_country_code"`
 }
 
-// TrTransferResultCallbackRequest reports the final outcome of a transfer.
-//
-// Two different flows deliver to this one path, and they do not carry the same
-// fields. Use IsOutboundAuthorization to tell them apart:
-//
-//   - An inbound on-chain result, forwarded from the counterparty. Status is
-//     confirmed with a Txid, or canceled. VaspId is set; Result is empty.
-//   - The authorisation conclusion for one of the merchant's own withdrawals,
-//     following a transfer call. Result is verified or denied and Payload holds
-//     the counterparty's identity data. Status, VaspId, Txid and Vout are empty.
+// TrTransferResultCallbackRequest reports an inbound transfer's final on-chain
+// outcome. Withdrawal authorisation results are returned synchronously by the
+// platform transfer endpoint and are not delivered through this callback.
 //
 // This is the one callback with a defined idempotency rule: the same
 // transfer_id, status, txid and vout must always produce the same answer. It is
 // also the only one the platform retries more than once, so handle repeats.
 type TrTransferResultCallbackRequest struct {
-	// VaspId is set on inbound results only.
 	VaspId     string `json:"vasp_id"`
 	TransferId string `json:"transfer_id"`
 	// ProviderTransferId is the Travel Rule provider's transfer identifier.
-	// Set on inbound on-chain results only.
-	ProviderTransferId string `json:"provider_transfer_id,omitempty"`
+	ProviderTransferId string `json:"provider_transfer_id"`
 	// Status is confirmed when reporting an on-chain result, or canceled when
-	// ending a transfer. Empty on an outbound authorisation conclusion.
+	// ending a transfer.
 	Status string `json:"status"`
 	// Txid is present when reporting a completed inbound transfer.
-	Txid string `json:"txid,omitempty"`
-	Vout string `json:"vout,omitempty"`
-	// Result is TrResultVerified or TrResultDenied on an outbound authorisation
-	// conclusion, and empty on an inbound result.
-	Result        string `json:"result,omitempty"`
-	ReasonType    string `json:"reason_type,omitempty"`
-	ReasonMessage string `json:"reason_message,omitempty"`
-	// Payload is the counterparty's IVMS101 ciphertext, present on an outbound
-	// authorisation conclusion. Decrypt it with the beneficiary public key used
-	// for the transfer.
-	Payload string `json:"payload,omitempty"`
-}
-
-// IsOutboundAuthorization reports whether this delivery is the authorisation
-// conclusion for one of the merchant's own withdrawals rather than an inbound
-// on-chain result.
-//
-// The two are distinguished by which fields are populated: only the outbound
-// conclusion carries Result, and only the inbound result carries Status.
-func (r TrTransferResultCallbackRequest) IsOutboundAuthorization() bool {
-	return r.Result != "" && r.Status == ""
+	Txid       string `json:"txid"`
+	Vout       string `json:"vout"`
+	ReasonType string `json:"reason_type"`
 }
 
 // TrTransferResultCallbackResponse answers with TrResultNormal or TrResultError.
 type TrTransferResultCallbackResponse struct {
 	Result        string `json:"result"`
-	ReasonType    string `json:"reason_type,omitempty"`
-	ReasonMessage string `json:"reason_message,omitempty"`
+	ReasonType    string `json:"reason_type"`
+	ReasonMessage string `json:"reason_message"`
 }
 
 // TrPostTransferCallbackRequest carries the identity data a counterparty
 // supplied for a deposit that had already settled.
 type TrPostTransferCallbackRequest struct {
-	VaspId             string `json:"vasp_id"`
-	TransferId         string `json:"transfer_id"`
+	VaspId     string `json:"vasp_id"`
+	TransferId string `json:"transfer_id"`
 	// ProviderTransferId is the Travel Rule provider's transfer identifier.
 	ProviderTransferId string `json:"provider_transfer_id"`
 	Txid               string `json:"txid"`
@@ -232,25 +207,23 @@ type TrPostTransferCallbackRequest struct {
 // TrPostTransferCallbackResponse answers with TrResultNormal or TrResultError.
 type TrPostTransferCallbackResponse struct {
 	Result        string `json:"result"`
-	ReasonType    string `json:"reason_type,omitempty"`
-	ReasonMessage string `json:"reason_message,omitempty"`
-	// Payload optionally carries the merchant's own encrypted data.
-	Payload string `json:"payload,omitempty"`
+	ReasonType    string `json:"reason_type"`
+	ReasonMessage string `json:"reason_message"`
 	// Coin is the platform coin name, the same form everywhere else. The platform
 	// maps it back to the provider's currency before answering the counterparty,
 	// so there is no need to deal in provider terms here.
-	Coin   string `json:"coin,omitempty"`
-	Amount string `json:"amount,omitempty"`
-	// HistoricalCost, TradePrice, TradeCurrency and IsExceedingThreshold are
-	// optional echoes of the transfer details.
-	HistoricalCost       string `json:"historical_cost,omitempty"`
-	TradePrice           string `json:"trade_price,omitempty"`
-	TradeCurrency        string `json:"trade_currency,omitempty"`
-	IsExceedingThreshold *bool  `json:"is_exceeding_threshold,omitempty"`
+	Coin                 string `json:"coin"`
+	Amount               string `json:"amount"`
+	HistoricalCost       string `json:"historical_cost"`
+	TradePrice           string `json:"trade_price"`
+	TradeCurrency        string `json:"trade_currency"`
+	IsExceedingThreshold bool   `json:"is_exceeding_threshold"`
+	// Payload carries the merchant's own encrypted data.
+	Payload string `json:"payload"`
 	// OriginatorCountryCode is the originator's country code (ISO 3166-1 alpha-2).
-	OriginatorCountryCode string `json:"originator_country_code,omitempty"`
+	OriginatorCountryCode string `json:"originator_country_code"`
 	// BeneficiaryCountryCode is the beneficiary's country code (ISO 3166-1 alpha-2).
-	BeneficiaryCountryCode string `json:"beneficiary_country_code,omitempty"`
+	BeneficiaryCountryCode string `json:"beneficiary_country_code"`
 }
 
 // TrAddressRegionCallbackRequest asks for the jurisdiction of the customer
@@ -289,6 +262,8 @@ type TrHealthCallbackRequest struct {
 type TrHealthCallbackResponse struct {
 	// Healthy false makes the handler answer HTTP 503.
 	Healthy bool   `json:"-"`
-	Status  string `json:"status,omitempty"`
-	Msg     string `json:"msg,omitempty"`
+	Status  string `json:"status"`
+	// Msg is sent only to ErrorLog when unhealthy; it is not part of the wire
+	// response documented by the platform.
+	Msg string `json:"-"`
 }

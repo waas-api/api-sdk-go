@@ -347,7 +347,7 @@ Encrypt the payload for `OriginatorPublicKey` from the lookup result.
 
 ### Callback server
 
-Six endpoints on your side. Signature verification runs inside each handler and
+Seven endpoints on your side. Signature verification runs inside each handler and
 a failed verification never reaches your business function.
 
 ```go
@@ -394,10 +394,11 @@ Points worth knowing:
 - **`transferResult` must be idempotent.** It is retried more than once, and the
   same `transfer_id`, `status`, `txid` and `vout` must always produce the same
   answer.
-- **`transferResult` receives two different shapes.** An inbound on-chain result
-  carries `status` and `txid`; the authorisation conclusion for one of your own
-  withdrawals carries `result` and `payload` instead. Use
-  `IsOutboundAuthorization()` to tell them apart.
+- **`transferResult` only reports inbound on-chain outcomes.** It carries
+  `status=confirmed` or `status=canceled`, together with the provider transfer
+  identifier and applicable chain fields. Authorisation for your own withdrawal
+  is returned synchronously by the platform `transfer` endpoint and is not sent
+  through this callback.
 - **The reason field is `reason_message` everywhere**, in both directions and on
   every callback. It matters most on responses: the platform reads only that name,
   so a body built by hand under any other one loses the detail with no error, and
